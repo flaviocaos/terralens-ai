@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<meta name="description" content="TerraLens AI v4.0 — Plataforma de análise geoespacial e 360° com IA. 35 análises, 100% no navegador."/>
+<title>TerraLens AI v4.0 — Geospatial + 360° Intelligence</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#080c14;color:#e2eeff;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:#0d1422}
+::-webkit-scrollbar-thumb{background:#1e3050;border-radius:3px}
+textarea,select,input,button{font-family:inherit}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const{useState,useRef}=React;
+const C={bg:"#080c14",bg2:"#0d1422",bg3:"#111827",panel:"#131d2e",border:"#1e3050",border2:"#243a5e",blue:"#1e7fff",blue2:"#3b9eff",cyan:"#00d4ff",green:"#00ff88",yellow:"#ffe44d",red:"#ff4d6d",orange:"#ff9f1c",purple:"#a855f7",teal:"#0fffc1",pink:"#ff6eb4",text:"#e2eeff",text2:"#8ba3c7",text3:"#4a6a9a"};
+const PAL=[{n:"Vegetacao Densa",c:[34,139,34]},{n:"Agricultura",c:[107,142,35]},{n:"Solo Exposto",c:[194,154,108]},{n:"Corpo d Agua",c:[30,120,200]},{n:"Area Urbana",c:[150,150,160]},{n:"Floresta",c:[0,100,0]},{n:"Pastagem",c:[210,180,100]},{n:"Area Umida",c:[0,180,180]}];
+
+const SAT=[
+  {id:"lulc",icon:"🌍",label:"Classificacao LULC",desc:"Uso e cobertura do solo",tags:["ML","DL"],cat:"Cobertura",models:[{name:"Random Forest",lib:"scikit-learn",rec:true,gpu:false,time:"15-40min",compl:"Media",acc:"89-94%",pros:"Alta acuracia, sem GPU",cons:"Nao captura textura"},{name:"XGBoost",lib:"xgboost",gpu:false,time:"10-30min",compl:"Media",acc:"88-93%",pros:"Menos overfitting",cons:"Sensivel a escala"},{name:"U-Net",lib:"pytorch",gpu:true,time:"2-8h",compl:"Alta",acc:"91-96%",pros:"Bordas precisas",cons:"Requer GPU"},{name:"DeepLab v3+",lib:"tensorflow",gpu:true,time:"3-10h",compl:"Alta",acc:"92-97%",pros:"SOTA multiescala",cons:"Alto custo"}]},
+  {id:"vigor",icon:"🌿",label:"Vigor e Biomassa",desc:"Saude vegetativa e biomassa",tags:["Indice","ML"],cat:"Vegetacao",models:[{name:"RF Regressor",lib:"scikit-learn",rec:true,gpu:false,time:"10-25min",compl:"Media",acc:"R2>0.85",pros:"Rapido sem GPU",cons:"Limitado textura"},{name:"XGBoost Reg.",lib:"xgboost",gpu:false,time:"8-20min",compl:"Media",acc:"R2>0.87",pros:"Feature importance",cons:"Requer tuning"},{name:"EfficientNet",lib:"timm",gpu:true,time:"4-12h",compl:"Alta",acc:"R2>0.91",pros:"Alta capacidade",cons:"300+ amostras"},{name:"NDVI Stack",lib:"numpy",gpu:false,time:"<5min",compl:"Baixa",acc:"Proxy",pros:"Instantaneo",cons:"Sem padrao espacial"}]},
+  {id:"queimadas",icon:"🔥",label:"Queimadas e Severidade",desc:"Areas queimadas e fogo",tags:["Indice","ML"],cat:"Ambiental",models:[{name:"NBR+dNBR",lib:"numpy",rec:true,gpu:false,time:"<10min",compl:"Baixa",acc:"OA>90%",pros:"Padrao USGS",cons:"Pre/pos-fogo"},{name:"Random Forest",lib:"scikit-learn",gpu:false,time:"15-30min",compl:"Media",acc:"OA>92%",pros:"Contexto espacial",cons:"Amostras treino"},{name:"U-Net Fire",lib:"pytorch",gpu:true,time:"2-6h",compl:"Alta",acc:"OA>94%",pros:"Cicatrizes sutis",cons:"Requer GPU"},{name:"DeepLab v3+",lib:"tensorflow",gpu:true,time:"3-8h",compl:"Alta",acc:"OA>95%",pros:"Grandes areas",cons:"Complexo"}]},
+  {id:"urban",icon:"🏙️",label:"Expansao Urbana",desc:"Impermeabilizacao e ilhas de calor",tags:["ML","DL"],cat:"Urbano",models:[{name:"Random Forest",lib:"scikit-learn",rec:true,gpu:false,time:"15-40min",compl:"Media",acc:"OA>90%",pros:"Robusto sem GPU",cons:"Objetos pequenos"},{name:"U-Net Urban",lib:"pytorch",gpu:true,time:"2-8h",compl:"Alta",acc:"OA>94%",pros:"Edificacoes precisas",cons:"Requer GPU"},{name:"Mask R-CNN",lib:"torchvision",gpu:true,time:"4-16h",compl:"M.Alta",acc:"mAP>0.82",pros:"Instance segmentation",cons:"Muito lento"},{name:"SegFormer-B2",lib:"transformers",gpu:true,time:"3-10h",compl:"Alta",acc:"OA>95%",pros:"SOTA denso",cons:"Pesado"}]},
+  {id:"hidro",icon:"💧",label:"Dinamica Hidrica",desc:"Corpos d agua e inundacoes",tags:["Indice","ML"],cat:"Hidro",models:[{name:"NDWI+MNDWI",lib:"numpy",rec:true,gpu:false,time:"<10min",compl:"Baixa",acc:"OA>92%",pros:"Rapido validado",cons:"Confunde sombra"},{name:"Random Forest",lib:"scikit-learn",gpu:false,time:"10-25min",compl:"Media",acc:"OA>94%",pros:"Tipos de agua",cons:"Amostras treino"},{name:"U-Net Hydro",lib:"pytorch",gpu:true,time:"2-6h",compl:"Alta",acc:"OA>96%",pros:"Rios estreitos",cons:"Requer GPU"},{name:"DeepLab v3+",lib:"tensorflow",gpu:true,time:"3-8h",compl:"Alta",acc:"OA>96%",pros:"Deltas e umidas",cons:"Complexo"}]},
+  {id:"saneamento",icon:"🚰",label:"Saneamento e Esgoto",desc:"Efluentes e risco sanitario",tags:["ML","Indice"],cat:"Infraestrutura",models:[{name:"RF Sanitario",lib:"scikit-learn",rec:true,gpu:false,time:"15-35min",compl:"Media",acc:"OA>88%",pros:"Hidrico+solo",cons:"Amostras campo"},{name:"XGBoost Efluente",lib:"xgboost",gpu:false,time:"10-25min",compl:"Media",acc:"OA>90%",pros:"Padrao efluente",cons:"Turbidez natural"},{name:"U-Net Sanit.",lib:"pytorch",gpu:true,time:"2-6h",compl:"Alta",acc:"OA>93%",pros:"Redes de risco",cons:"GPU+anotacoes"},{name:"NDWI+Turbidez",lib:"numpy",gpu:false,time:"<10min",compl:"Baixa",acc:"Proxy",pros:"Rapido",cons:"Superficie visivel"}]},
+  {id:"floresta",icon:"🌲",label:"Cobertura Florestal",desc:"Densidade e fragmentacao",tags:["ML","DL"],cat:"Vegetacao",models:[{name:"Random Forest",lib:"scikit-learn",rec:true,gpu:false,time:"15-40min",compl:"Media",acc:"OA>91%",pros:"Robusto sem GPU",cons:"Sub-dossel"},{name:"XGBoost",lib:"xgboost",gpu:false,time:"10-25min",compl:"Media",acc:"OA>92%",pros:"Indices espectrais",cons:"Requer tuning"},{name:"U-Net Forest",lib:"pytorch",gpu:true,time:"2-8h",compl:"Alta",acc:"OA>95%",pros:"Clareiras e bordas",cons:"Requer GPU"},{name:"EfficientNet+UNet",lib:"pytorch",gpu:true,time:"3-10h",compl:"Alta",acc:"OA>96%",pros:"Transfer learning",cons:"Dados especificos"}]},
+  {id:"erosao",icon:"🏔️",label:"Erosao e Degradacao",desc:"Risco erosivo e degradacao",tags:["ML"],cat:"Ambiental",models:[{name:"Random Forest",lib:"scikit-learn",rec:true,gpu:false,time:"15-35min",compl:"Media",acc:"OA>88%",pros:"indices+MDE",cons:"Precisa MDE"},{name:"XGBoost",lib:"xgboost",gpu:false,time:"10-25min",compl:"Media",acc:"OA>89%",pros:"Variaveis mistas",cons:"Feature eng."},{name:"SVM RBF",lib:"scikit-learn",gpu:false,time:"20-60min",compl:"Media",acc:"OA>87%",pros:"Amostras pequenas",cons:"Lento"},{name:"CNN+MDE",lib:"pytorch",gpu:true,time:"3-8h",compl:"Alta",acc:"OA>93%",pros:"Imagem+elevacao",cons:"GPU+auxiliares"}]},
+  {id:"spectral",icon:"📈",label:"Indices Espectrais",desc:"NDVI, EVI, NDWI, NBR",tags:["Indice"],cat:"Espectral",models:[{name:"Stack RGB JS",lib:"JavaScript",rec:true,gpu:false,time:"<1min",compl:"Baixa",acc:"Proxy RGB",pros:"100% browser",cons:"Sem NIR real"},{name:"NDVI/EVI reais",lib:"rasterio+numpy",gpu:false,time:"<5min",compl:"Baixa",acc:"Alta(NIR)",pros:"Padrao ouro",cons:"Multiespectral"},{name:"Hiperespectral",lib:"spectral",gpu:false,time:"10-30min",compl:"Media",acc:"Alta",pros:"Assinatura completa",cons:"Sensor especifico"},{name:"RF Indices",lib:"scikit-learn",gpu:false,time:"10-25min",compl:"Media",acc:"R2>0.88",pros:"Combina indices",cons:"Calibracao"}]},
+  {id:"telhados",icon:"🏠",label:"Extracao de Telhados",desc:"Deteccao e contagem de edificacoes",tags:["DL","GPU"],cat:"Urbano",models:[{name:"YOLOv8-seg",lib:"ultralytics",rec:true,gpu:true,time:"1-3h",compl:"Alta",acc:"mAP50>0.82",pros:"Rapido e preciso",cons:"< 0.5m GSD"},{name:"Mask R-CNN",lib:"torchvision",gpu:true,time:"4-12h",compl:"M.Alta",acc:"mAP50>0.79",pros:"Instance seg.",cons:"Muito lento"},{name:"U-Net Roof",lib:"pytorch",gpu:true,time:"2-6h",compl:"Alta",acc:"IoU>0.84",pros:"Sem. de telhados",cons:"Ground truth"},{name:"SegFormer-B3",lib:"transformers",gpu:true,time:"3-8h",compl:"Alta",acc:"IoU>0.87",pros:"SOTA urbano",cons:"GPU A100"}]},
+  {id:"terreno",icon:"🗺️",label:"Avaliacao de Terrenos",desc:"Valor, uso potencial e caracteristicas",tags:["ML","Indice"],cat:"Imobiliario",models:[{name:"RF Avaliador",lib:"scikit-learn",rec:true,gpu:false,time:"10-25min",compl:"Media",acc:"R2>0.83",pros:"Topo+cobert+acesso",cons:"Dados mercado"},{name:"XGBoost Land",lib:"xgboost",gpu:false,time:"8-20min",compl:"Media",acc:"R2>0.86",pros:"Feature importance",cons:"Calibracao local"},{name:"CNN Terrain",lib:"pytorch",gpu:true,time:"2-6h",compl:"Alta",acc:"R2>0.90",pros:"Padrao espacial",cons:"GPU+dados"},{name:"OBIA Parcels",lib:"scikit-learn",gpu:false,time:"20-50min",compl:"Media",acc:"OA>88%",pros:"Parcelas e lotes",cons:"Escala complexa"}]},
+  {id:"vetorizacao",icon:"✏️",label:"Vetorizacao Automatica",desc:"Estradas, limites e parcelas vetoriais",tags:["DL","GPU"],cat:"Cartografia",models:[{name:"D-LinkNet",lib:"pytorch",rec:true,gpu:true,time:"2-5h",compl:"Alta",acc:"F1>0.82",pros:"SOTA estradas",cons:"GPU+alta res."},{name:"U-Net Vectorize",lib:"pytorch",gpu:true,time:"2-6h",compl:"Alta",acc:"IoU>0.79",pros:"Contornos precisos",cons:"Dados anotados"},{name:"SAM+PostProc",lib:"segment-anything",gpu:true,time:"1-3h",compl:"Alta",acc:"Zero-shot",pros:"Sem anotacoes",cons:"Pos-proc manual"},{name:"OBIA+Topologia",lib:"scikit-learn",gpu:false,time:"30-90min",compl:"Alta",acc:"OA>85%",pros:"Topologia vetorial",cons:"Config. complexa"}]},
+  {id:"solar",icon:"☀️",label:"Potencial Solar",desc:"Geracao fotovoltaica por area de telhado",tags:["ML","Indice"],cat:"Energia",models:[{name:"RF Solar",lib:"scikit-learn",rec:true,gpu:false,time:"15-30min",compl:"Media",acc:"R2>0.87",pros:"Area+inclinacao+GHI",cons:"Requer DEM"},{name:"CNN Solar",lib:"pytorch",gpu:true,time:"2-5h",compl:"Alta",acc:"R2>0.91",pros:"Detecta obstrucoes",cons:"GPU+multitemp."},{name:"Indice GHI",lib:"numpy",gpu:false,time:"<10min",compl:"Baixa",acc:"Proxy",pros:"Calculo por area",cons:"Sem inclinacao"},{name:"XGBoost PV",lib:"xgboost",gpu:false,time:"10-20min",compl:"Media",acc:"R2>0.88",pros:"Multi-variaveis",cons:"Calibracao"}]},
+  {id:"agricultura_prec",icon:"🌾",label:"Agricultura de Precisao",desc:"Zonas de manejo e variabilidade produtiva",tags:["ML","Indice"],cat:"Agro",models:[{name:"RF Zonas",lib:"scikit-learn",rec:true,gpu:false,time:"15-35min",compl:"Media",acc:"OA>91%",pros:"Zonas por cluster",cons:"Multiespectral"},{name:"XGBoost Prod.",lib:"xgboost",gpu:false,time:"10-25min",compl:"Media",acc:"R2>0.88",pros:"Predicao produt.",cons:"Historico nec."},{name:"CNN Crop",lib:"pytorch",gpu:true,time:"3-8h",compl:"Alta",acc:"OA>93%",pros:"Cultura+estadio",cons:"GPU+dataset"},{name:"NDVI+NDRE Stack",lib:"numpy",gpu:false,time:"<5min",compl:"Baixa",acc:"Proxy",pros:"Variabilidade imediata",cons:"Proxy RGB"}]},
+  {id:"desmatamento",icon:"🪓",label:"Alerta de Desmatamento",desc:"Supressao vegetal e alertas",tags:["DL","ML"],cat:"Ambiental",models:[{name:"CNN Alert",lib:"pytorch",rec:true,gpu:true,time:"2-5h",compl:"Alta",acc:"OA>94%",pros:"Mudancas rapidas",cons:"Par de imagens"},{name:"CVA+Threshold",lib:"numpy",gpu:false,time:"<15min",compl:"Baixa",acc:"OA>85%",pros:"Sem supervisao",cons:"Falsos positivos"},{name:"Siamese U-Net",lib:"pytorch",gpu:true,time:"2-6h",compl:"Alta",acc:"OA>93%",pros:"Mudancas sutis",cons:"GPU+pares"},{name:"NDVI Diff",lib:"numpy",gpu:false,time:"<10min",compl:"Baixa",acc:"Proxy",pros:"Imediato",cons:"Limiar manual"}]},
+  {id:"inundacao",icon:"🌊",label:"Mapeamento de Inundacao",desc:"Areas alagadas e risco de cheias",tags:["ML","Indice"],cat:"Hidro",models:[{name:"U-Net Flood",lib:"pytorch",rec:true,gpu:true,time:"2-5h",compl:"Alta",acc:"IoU>0.88",pros:"Agua turva+limpa",cons:"GPU+SAR"},{name:"NDWI+SAR",lib:"numpy",gpu:false,time:"<15min",compl:"Baixa",acc:"OA>90%",pros:"Rapido sem GPU",cons:"Sombras urbanas"},{name:"RF Flood",lib:"scikit-learn",gpu:false,time:"10-25min",compl:"Media",acc:"OA>92%",pros:"Optico+SAR+DEM",cons:"Dados auxiliares"},{name:"Sentinel-1 SAR",lib:"rasterio",gpu:false,time:"<20min",compl:"Media",acc:"OA>93%",pros:"Funciona com nuvens",cons:"Sensor SAR"}]},
+  {id:"mineracao",icon:"⛏️",label:"Impacto de Mineracao",desc:"Garimpo, cavas e impacto ambiental",tags:["ML","DL"],cat:"Ambiental",models:[{name:"RF Mining",lib:"scikit-learn",rec:true,gpu:false,time:"15-35min",compl:"Media",acc:"OA>89%",pros:"Solo+agua turva",cons:"Confunde agri."},{name:"U-Net Mine",lib:"pytorch",gpu:true,time:"2-6h",compl:"Alta",acc:"OA>93%",pros:"Seg. de cavas",cons:"GPU+rotulados"},{name:"XGBoost Mine",lib:"xgboost",gpu:false,time:"10-25min",compl:"Media",acc:"OA>90%",pros:"Indices espectrais",cons:"Feature eng."},{name:"NDVI+Turbidez",lib:"numpy",gpu:false,time:"<10min",compl:"Baixa",acc:"Proxy",pros:"Garimpo por turbidez",cons:"Rios proximos"}]},
+  {id:"estradas",icon:"🛣️",label:"Extracao de Vias",desc:"Estradas, trilhas e acessos",tags:["DL","GPU"],cat:"Cartografia",models:[{name:"D-LinkNet-34",lib:"pytorch",rec:true,gpu:true,time:"2-5h",compl:"Alta",acc:"F1>0.84",pros:"SOTA estradas",cons:"GPU+alta res."},{name:"U-Net Road",lib:"pytorch",gpu:true,time:"2-6h",compl:"Alta",acc:"F1>0.80",pros:"Nao pavimentadas",cons:"Confunde rios"},{name:"SegFormer Road",lib:"transformers",gpu:true,time:"3-8h",compl:"Alta",acc:"F1>0.86",pros:"Cenas urbanas",cons:"Pesado"},{name:"OBIA Linear",lib:"scikit-learn",gpu:false,time:"20-60min",compl:"Media",acc:"F1>0.75",pros:"Sem GPU",cons:"Config. trabalhosa"}]},
+  {id:"carbono",icon:"🌡️",label:"Estoque de Carbono",desc:"Biomassa e sequestro de CO2",tags:["ML","Indice"],cat:"Ambiental",models:[{name:"RF Carbon",lib:"scikit-learn",rec:true,gpu:false,time:"15-35min",compl:"Media",acc:"R2>0.84",pros:"NDVI+altura+AGB",cons:"Dados campo"},{name:"XGBoost AGB",lib:"xgboost",gpu:false,time:"10-25min",compl:"Media",acc:"R2>0.87",pros:"Feature importance",cons:"Calibracao"},{name:"CNN+LiDAR",lib:"pytorch",gpu:true,time:"3-8h",compl:"Alta",acc:"R2>0.92",pros:"Altura dossel",cons:"GPU+LiDAR"},{name:"NDVI AGB Proxy",lib:"numpy",gpu:false,time:"<5min",compl:"Baixa",acc:"Proxy",pros:"Instantaneo",cons:"Alta incerteza"}]},
+  {id:"solos",icon:"🟤",label:"Classificacao de Solos",desc:"Tipos de solo e aptidao agricola",tags:["ML"],cat:"Agro",models:[{name:"RF Solo",lib:"scikit-learn",rec:true,gpu:false,time:"15-40min",compl:"Media",acc:"OA>86%",pros:"Espectral+topo",cons:"Campo necessario"},{name:"XGBoost Soil",lib:"xgboost",gpu:false,time:"10-30min",compl:"Media",acc:"OA>88%",pros:"Classes texturais",cons:"Feature eng."},{name:"CNN Soil",lib:"pytorch",gpu:true,time:"3-8h",compl:"Alta",acc:"OA>91%",pros:"Padrao espectral",cons:"GPU+laboratorio"},{name:"Indices Soil",lib:"numpy",gpu:false,time:"<10min",compl:"Baixa",acc:"Proxy",pros:"BI,CI,NSMI rapidos",cons:"Sem NIR"}]},
+  {id:"topografia",icon:"⛰️",label:"Analise Topografica",desc:"Declividade, aspecto e bacias",tags:["ML","Indice"],cat:"Topografia",models:[{name:"DEM Analysis",lib:"numpy",rec:true,gpu:false,time:"<10min",compl:"Baixa",acc:"Alta",pros:"Slope+aspect direto",cons:"Requer DEM"},{name:"RF Topo",lib:"scikit-learn",gpu:false,time:"10-25min",compl:"Media",acc:"OA>90%",pros:"Unidades relevo",cons:"DEM qualidade"},{name:"CNN Terrain",lib:"pytorch",gpu:true,time:"2-5h",compl:"Alta",acc:"OA>93%",pros:"Formas relevo",cons:"GPU+DEM alta res."},{name:"TPI+TRI+TWI",lib:"numpy",gpu:false,time:"<5min",compl:"Baixa",acc:"Proxy",pros:"Morfometria imediata",cons:"Sem DEM=proxy"}]},
+];
+
+const V360=[
+  {id:"buracos",icon:"🕳️",label:"Reconhecimento de Buracos",desc:"Buracos, trincas e pavimento degradado",tags:["DL","GPU"],cat:"Pavimento",models:[{name:"YOLOv8-x",lib:"ultralytics",rec:true,gpu:true,time:"30-90min",compl:"Alta",acc:"mAP50>0.81",pros:"Deteccao em tempo real",cons:"Dataset especifico"},{name:"DeepLab v3+",lib:"tensorflow",gpu:true,time:"2-5h",compl:"Alta",acc:"IoU>0.79",pros:"Segmentacao pixel",cons:"GPU A100"},{name:"Mask R-CNN",lib:"torchvision",gpu:true,time:"3-8h",compl:"M.Alta",acc:"mAP50>0.77",pros:"Tamanho+forma",cons:"Lento para video"},{name:"RT-DETR",lib:"transformers",gpu:true,time:"1-3h",compl:"Alta",acc:"mAP50>0.83",pros:"Tempo real sem anchor",cons:"Muitos dados"}]},
+  {id:"bueiros",icon:"🔵",label:"Reconhecimento de Bueiros",desc:"Bueiros, galerias e bocas de lobo",tags:["DL","GPU"],cat:"Drenagem",models:[{name:"YOLOv8-l",lib:"ultralytics",rec:true,gpu:true,time:"30-60min",compl:"Alta",acc:"mAP50>0.84",pros:"Objetos pequenos",cons:"Dataset rotulado"},{name:"RT-DETR",lib:"transformers",gpu:true,time:"1-2h",compl:"Alta",acc:"mAP50>0.86",pros:"SOTA deteccao",cons:"Dataset grande"},{name:"RetinaNet",lib:"torchvision",gpu:true,time:"2-5h",compl:"Alta",acc:"mAP50>0.80",pros:"Objetos obstruidos",cons:"Mais lento"},{name:"EfficientDet",lib:"timm",gpu:true,time:"2-4h",compl:"Alta",acc:"mAP50>0.82",pros:"Deploy mobile",cons:"Menos acuracia"}]},
+  {id:"postes",icon:"💡",label:"Reconhecimento de Postes",desc:"Inventario de postes e luminarias",tags:["DL","GPU"],cat:"Eletrico",models:[{name:"YOLOv8-x",lib:"ultralytics",rec:true,gpu:true,time:"30-60min",compl:"Alta",acc:"mAP50>0.87",pros:"Rapido e preciso",cons:"Boa qualidade img"},{name:"Faster R-CNN",lib:"torchvision",gpu:true,time:"2-6h",compl:"Alta",acc:"mAP50>0.84",pros:"Parcialmente ocultos",cons:"Lento"},{name:"RT-DETR",lib:"transformers",gpu:true,time:"1-3h",compl:"Alta",acc:"mAP50>0.89",pros:"SOTA lineares",cons:"Muitos dados"},{name:"DETR",lib:"transformers",gpu:true,time:"3-8h",compl:"Alta",acc:"mAP50>0.82",pros:"Sem anchor boxes",cons:"Lento treino"}]},
+  {id:"placas_rua",icon:"🚦",label:"Placas de Rua e Sinalizacao",desc:"Placas de transito, nomes de ruas",tags:["DL","GPU"],cat:"Sinalizacao",models:[{name:"YOLOv8-seg",lib:"ultralytics",rec:true,gpu:true,time:"30-60min",compl:"Alta",acc:"mAP50>0.91",pros:"Alta acuracia placas",cons:"OCR separado"},{name:"EfficientDet-D4",lib:"timm",gpu:true,time:"2-4h",compl:"Alta",acc:"mAP50>0.88",pros:"Deploy embarcado",cons:"Baixa luz"},{name:"RT-DETR",lib:"transformers",gpu:true,time:"1-3h",compl:"Alta",acc:"mAP50>0.93",pros:"Melhor acuracia",cons:"Muitos dados"},{name:"TrOCR+Det",lib:"transformers",gpu:true,time:"2-5h",compl:"M.Alta",acc:"mAP+OCR",pros:"Detecta+le texto",cons:"Pipeline complexo"}]},
+  {id:"placas_auto",icon:"🚗",label:"Placas de Automoveis (LPR)",desc:"Reconhecimento automatico de placas veiculares",tags:["DL","GPU"],cat:"Veiculo",models:[{name:"YOLOv8+OCR",lib:"ultralytics+easyocr",rec:true,gpu:true,time:"30-60min",compl:"Alta",acc:"mAP50>0.93",pros:"Det+leitura completo",cons:"Fine-tune BR"},{name:"LPRNet",lib:"pytorch",gpu:true,time:"1-3h",compl:"Alta",acc:"Acc>0.94",pros:"Arquitetura LPR",cons:"Dataset por pais"},{name:"WPOD-NET",lib:"tensorflow",gpu:true,time:"1-2h",compl:"Alta",acc:"Acc>0.92",pros:"Angulos+distancias",cons:"OCR separado"},{name:"TrOCR Fine-tuned",lib:"transformers",gpu:true,time:"2-5h",compl:"M.Alta",acc:"Acc>0.95",pros:"SOTA leitura texto",cons:"Pesado deploy"}]},
+  {id:"fachadas",icon:"🏢",label:"Analise de Fachadas",desc:"Estado de conservacao e material de fachadas",tags:["DL","ML"],cat:"Urbano",models:[{name:"ResNet+Classifier",lib:"pytorch",rec:true,gpu:true,time:"1-3h",compl:"Alta",acc:"Acc>0.87",pros:"Bom/regular/ruim",cons:"Dataset rotulado"},{name:"ViT-B16",lib:"transformers",gpu:true,time:"2-5h",compl:"Alta",acc:"Acc>0.90",pros:"SOTA classificacao",cons:"Alto custo"},{name:"EfficientNet-B4",lib:"timm",gpu:true,time:"1-3h",compl:"Alta",acc:"Acc>0.88",pros:"Custo-beneficio",cons:"Fine-tune extenso"},{name:"U-Net Facade",lib:"pytorch",gpu:true,time:"2-6h",compl:"Alta",acc:"IoU>0.82",pros:"Janelas+danos",cons:"Dataset complexo"}]},
+  {id:"arborizacao",icon:"🌳",label:"Inventario de Arborizacao",desc:"Contagem e estado de arvores urbanas",tags:["DL","GPU"],cat:"Verde Urbano",models:[{name:"YOLOv8-x Tree",lib:"ultralytics",rec:true,gpu:true,time:"1-3h",compl:"Alta",acc:"mAP50>0.85",pros:"Conta+localiza",cons:"Especie=dataset"},{name:"Mask R-CNN",lib:"torchvision",gpu:true,time:"3-8h",compl:"M.Alta",acc:"mAP50>0.82",pros:"Copa individual",cons:"Lento"},{name:"EfficientNet Tree",lib:"timm",gpu:true,time:"1-3h",compl:"Alta",acc:"Acc>0.88",pros:"Classificacao especies",cons:"Dataset botanico"},{name:"DeepForest",lib:"pytorch",gpu:true,time:"1-2h",compl:"Alta",acc:"mAP50>0.87",pros:"Pre-treinado arvores",cons:"Melhor aerea"}]},
+  {id:"acessibilidade",icon:"♿",label:"Acessibilidade Urbana",desc:"Rampas, obstaculos e piso tatil",tags:["DL","ML"],cat:"Urbano",models:[{name:"YOLOv8-l Access",lib:"ultralytics",rec:true,gpu:true,time:"1-3h",compl:"Alta",acc:"mAP50>0.83",pros:"Multi-feicoes",cons:"Dataset BR"},{name:"SegFormer-B2",lib:"transformers",gpu:true,time:"2-5h",compl:"Alta",acc:"mIoU>0.80",pros:"Calcadas+obstaculos",cons:"Pesado"},{name:"DeepLab v3+",lib:"tensorflow",gpu:true,time:"2-6h",compl:"Alta",acc:"mIoU>0.81",pros:"Seg. pavimento",cons:"GPU necessario"},{name:"RF Visual",lib:"scikit-learn",gpu:false,time:"30-60min",compl:"Media",acc:"OA>78%",pros:"Sem GPU",cons:"Menor acuracia"}]},
+  {id:"lixo_irregular",icon:"🗑️",label:"Descarte Irregular de Lixo",desc:"Pontos de descarte e entulho",tags:["DL","GPU"],cat:"Ambiental",models:[{name:"YOLOv8-x Waste",lib:"ultralytics",rec:true,gpu:true,time:"1-3h",compl:"Alta",acc:"mAP50>0.80",pros:"Materiais+volumes",cons:"Dataset residuos"},{name:"Mask R-CNN",lib:"torchvision",gpu:true,time:"3-8h",compl:"M.Alta",acc:"mAP50>0.78",pros:"Segmenta area",cons:"Lento"},{name:"EfficientDet",lib:"timm",gpu:true,time:"1-3h",compl:"Alta",acc:"mAP50>0.77",pros:"Deploy campo",cons:"Calibracao"},{name:"CNN Classifier",lib:"pytorch",gpu:true,time:"1-2h",compl:"Alta",acc:"Acc>0.85",pros:"Tipo residuo",cons:"Sem localizacao"}]},
+  {id:"rachaduras",icon:"⚡",label:"Rachaduras e Patologias",desc:"Trincas e patologias em estruturas",tags:["DL","GPU"],cat:"Estrutural",models:[{name:"CrackFormer",lib:"pytorch",rec:true,gpu:true,time:"1-3h",compl:"Alta",acc:"F1>0.85",pros:"Especializado trincas",cons:"GPU+patologias"},{name:"U-Net Crack",lib:"pytorch",gpu:true,time:"2-5h",compl:"Alta",acc:"IoU>0.82",pros:"Trincas finas",cons:"GPU+pixel annot"},{name:"YOLOv8 Crack",lib:"ultralytics",gpu:true,time:"30-90min",compl:"Alta",acc:"mAP50>0.81",pros:"Deploy campo",cons:"Trincas finas"},{name:"EfficientNet Struct",lib:"timm",gpu:true,time:"1-2h",compl:"Alta",acc:"Acc>0.88",pros:"Classifica gravidade",cons:"Sem localizacao"}]},
+  {id:"veiculos360",icon:"🚙",label:"Deteccao e Contagem de Veiculos",desc:"Contagem, tipo e fluxo de veiculos",tags:["DL","GPU"],cat:"Veiculo",models:[{name:"YOLOv8-x Vehicle",lib:"ultralytics",rec:true,gpu:true,time:"30-60min",compl:"Alta",acc:"mAP50>0.92",pros:"Multi-classe",cons:"Oclusao densa"},{name:"RT-DETR",lib:"transformers",gpu:true,time:"1-3h",compl:"Alta",acc:"mAP50>0.94",pros:"SOTA veiculos",cons:"Alto custo"},{name:"ByteTrack",lib:"ultralytics",gpu:true,time:"1-2h",compl:"Alta",acc:"MOTA>0.88",pros:"Rastreamento",cons:"Requer video"},{name:"Faster R-CNN",lib:"torchvision",gpu:true,time:"3-8h",compl:"Alta",acc:"mAP50>0.89",pros:"Cenas estaticas",cons:"Lento video"}]},
+  {id:"pessoas360",icon:"🚶",label:"Deteccao de Pessoas e Fluxo",desc:"Contagem e fluxo de pedestres",tags:["DL","GPU"],cat:"Pessoas",models:[{name:"YOLOv8-pose",lib:"ultralytics",rec:true,gpu:true,time:"30-60min",compl:"Alta",acc:"mAP50>0.89",pros:"Detecta+pose",cons:"Anonimizar faces"},{name:"CSRNet",lib:"pytorch",gpu:true,time:"1-3h",compl:"Alta",acc:"MAE<10",pros:"Mapa densidade",cons:"Sem localizacao"},{name:"RT-DETR",lib:"transformers",gpu:true,time:"1-3h",compl:"Alta",acc:"mAP50>0.91",pros:"SOTA pedestres",cons:"Alto custo"},{name:"ByteTrack Ped",lib:"ultralytics",gpu:true,time:"1-2h",compl:"Alta",acc:"MOTA>0.85",pros:"Fluxo rastreado",cons:"Necessita video"}]},
+  {id:"comercios",icon:"🏪",label:"Mapeamento de Comercios",desc:"Identificacao e classificacao de fachadas comerciais",tags:["DL","ML"],cat:"Comercial",models:[{name:"ViT+OCR",lib:"transformers",rec:true,gpu:true,time:"2-5h",compl:"Alta",acc:"Acc>0.84",pros:"Fachada+nome loja",cons:"Dataset fachadas"},{name:"CLIP Zero-shot",lib:"transformers",gpu:true,time:"1-3h",compl:"Alta",acc:"Zero-shot",pros:"Sem treinamento",cons:"Menor acuracia"},{name:"EfficientNet-B5",lib:"timm",gpu:true,time:"1-3h",compl:"Alta",acc:"Acc>0.87",pros:"Tipo comercio",cons:"Dataset rotulado"},{name:"YOLOv8+OCR",lib:"ultralytics+easyocr",gpu:true,time:"1-2h",compl:"Alta",acc:"mAP50>0.82",pros:"Detecta+le texto",cons:"Sensivel angulo"}]},
+  {id:"inspecao_predial",icon:"🔍",label:"Inspecao Predial Automatica",desc:"Analise completa de danos e patologias",tags:["DL","GPU"],cat:"Estrutural",models:[{name:"U-Net Inspecao",lib:"pytorch",rec:true,gpu:true,time:"2-6h",compl:"Alta",acc:"IoU>0.84",pros:"Multi-patologias",cons:"GPU+especifico"},{name:"ViT-L Inspector",lib:"transformers",gpu:true,time:"3-8h",compl:"Alta",acc:"Acc>0.91",pros:"Severidade global",cons:"Alto custo"},{name:"YOLOv8 Defects",lib:"ultralytics",gpu:true,time:"1-3h",compl:"Alta",acc:"mAP50>0.83",pros:"Tempo real",cons:"Dataset patologias"},{name:"Ensemble CNN",lib:"pytorch",gpu:true,time:"3-8h",compl:"M.Alta",acc:"Acc>0.93",pros:"Maxima acuracia",cons:"Alto custo lento"}]},
+];
+
+// ── UI ──
+const Btn=({variant="primary",style,...p})=>{const v={primary:{background:`linear-gradient(135deg,${C.blue},${C.cyan})`,color:"#fff",border:"none"},secondary:{background:"transparent",border:`1px solid ${C.border2}`,color:C.text},ghost:{background:"transparent",border:`1px solid ${C.border}`,color:C.text2}};return <button style={{padding:"8px 18px",borderRadius:7,fontSize:12,fontWeight:700,cursor:"pointer",...v[variant],...style}} {...p}/>;};
+const Card=({style,...p})=><div style={{background:C.panel,border:`1px solid ${C.border}`,borderRadius:12,padding:16,...style}} {...p}/>;
+const Pill=({color,children})=><span style={{padding:"3px 9px",borderRadius:20,fontSize:10,fontWeight:700,background:`${color}18`,border:`1px solid ${color}44`,color}}>{children}</span>;
+const Tag=({t})=><span style={{padding:"2px 7px",borderRadius:10,fontSize:9,fontWeight:700,background:t==="DL"?"rgba(168,85,247,.12)":t==="ML"?"rgba(59,158,255,.12)":"rgba(0,255,136,.12)",border:`1px solid ${t==="DL"?"rgba(168,85,247,.3)":t==="ML"?"rgba(59,158,255,.3)":"rgba(0,255,136,.3)"}`,color:t==="DL"?C.purple:t==="ML"?C.blue2:C.green}}>{t}</span>;
+
+const Gauge=({value,max=100,color,label,unit=""})=>{const pct=Math.min(Math.max((typeof value==="number"?value:0)/max,0),1),r=38,cx=50,cy=50,toR=d=>d*Math.PI/180,aX=(a,rr)=>cx+rr*Math.cos(toR(a)),aY=(a,rr)=>cy+rr*Math.sin(toR(a)),sA=-210,eA=30,sw=240,ang=sA+pct*sw,lx=aX(ang,r),ly=aY(ang,r),bg=`M${aX(sA,r)},${aY(sA,r)} A${r},${r},0,1,1,${aX(eA,r)},${aY(eA,r)}`,fg=pct>0?`M${aX(sA,r)},${aY(sA,r)} A${r},${r},0,${pct>.5?1:0},1,${lx},${ly}`:"";return(<div style={{textAlign:"center"}}><svg viewBox="0 0 100 80" width="110" height="88"><path d={bg} fill="none" stroke={C.border2} strokeWidth="7" strokeLinecap="round"/>{fg&&<path d={fg} fill="none" stroke={color} strokeWidth="7" strokeLinecap="round"/>}<text x="50" y="52" textAnchor="middle" fontSize="13" fontWeight="800" fill={color}>{typeof value==="number"?value.toFixed(1):value}{unit}</text><text x="50" y="63" textAnchor="middle" fontSize="7" fill={C.text3}>{label}</text></svg></div>);};
+
+const Donut=({slices,size=120})=>{const cx=size/2,cy=size/2,r=size*.33,ir=size*.2;let cum=0;const tot=slices.reduce((a,s)=>a+s.v,0)||1,paths=slices.map((s,i)=>{const st=cum/tot*2*Math.PI-Math.PI/2;cum+=s.v;const en=cum/tot*2*Math.PI-Math.PI/2,lg=en-st>Math.PI?1:0,x1=cx+r*Math.cos(st),y1=cy+r*Math.sin(st),x2=cx+r*Math.cos(en),y2=cy+r*Math.sin(en),ix1=cx+ir*Math.cos(st),iy1=cy+ir*Math.sin(st),ix2=cx+ir*Math.cos(en),iy2=cy+ir*Math.sin(en);return <path key={i} d={`M${ix1},${iy1} L${x1},${y1} A${r},${r},0,${lg},1,${x2},${y2} L${ix2},${iy2} A${ir},${ir},0,${lg},0,${ix1},${iy1}`} fill={s.c} opacity=".9"/>;});return(<svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>{paths}<circle cx={cx} cy={cy} r={ir-1} fill={C.bg2}/><text x={cx} y={cy-4} textAnchor="middle" fontSize="9" fontWeight="800" fill={C.text}>{slices[0]?.v?.toFixed(1)}%</text><text x={cx} y={cy+8} textAnchor="middle" fontSize="6" fill={C.text3}>{slices[0]?.l?.slice(0,10)}</text></svg>);};
+
+const RadarChart=({items,size=160})=>{if(!items||!items.length)return null;const n=items.length,cx=size/2,cy=size/2,r=size*.36,pts=items.map((_,i)=>{const a=(i/n*2*Math.PI)-Math.PI/2;return[cx+r*Math.cos(a),cy+r*Math.sin(a)];}),vPts=items.map((it,i)=>{const a=(i/n*2*Math.PI)-Math.PI/2,rv=r*(Math.min(it.v,100)/100);return[cx+rv*Math.cos(a),cy+rv*Math.sin(a)];});return(<svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>{[.25,.5,.75,1].map(f=><polygon key={f} points={pts.map(([x,y])=>[cx+(x-cx)*f,cy+(y-cy)*f].join(",")).join(" ")} fill="none" stroke={C.border} strokeWidth=".5"/>)}{pts.map(([x,y],i)=><line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke={C.border} strokeWidth=".5"/>)}<polygon points={vPts.map(p=>p.join(",")).join(" ")} fill={`${C.cyan}22`} stroke={C.cyan} strokeWidth="1.5"/>{vPts.map(([x,y],i)=><circle key={i} cx={x} cy={y} r="2.5" fill={C.cyan}/>)}{pts.map(([x,y],i)=>{const dx=x-cx,dy=y-cy,d=Math.sqrt(dx*dx+dy*dy),lx=cx+(dx/d)*(r+10),ly=cy+(dy/d)*(r+10);return <text key={i} x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" fontSize="6.5" fill={C.text2}>{items[i].l}</text>;})}</svg>);};
+
+const NDVIHist=({hist})=>{if(!hist||!hist.length)return null;const mx=Math.max(...hist,1);return(<div><div style={{display:"flex",alignItems:"flex-end",height:55,gap:1}}>{hist.map((v,i)=><div key={i} style={{flex:1,height:`${(v/mx)*100}%`,background:`hsl(${Math.round(i/20*120)},75%,${40+i*1.5}%)`,borderRadius:"1px 1px 0 0",minHeight:1}}/>)}</div><div style={{display:"flex",justifyContent:"space-between",fontSize:8,color:C.text3,marginTop:2}}><span>Solo</span><span>Neutro</span><span>Veg.</span></div></div>);};
+
+const RiskM=({level})=>{const L={Alto:{c:C.red,p:85},Medio:{c:C.orange,p:50},Baixo:{c:C.green,p:15},Alta:{c:C.red,p:80},Media:{c:C.yellow,p:45},Baixa:{c:C.green,p:15},Elevado:{c:C.red,p:90},Moderado:{c:C.yellow,p:45},Normal:{c:C.green,p:10},Deficiente:{c:C.red,p:80},Parcial:{c:C.yellow,p:45},Adequada:{c:C.green,p:15},Critica:{c:C.red,p:95},Otima:{c:C.green,p:5},Boa:{c:C.teal,p:20},Regular:{c:C.yellow,p:55}};const cfg=L[level]||{c:C.cyan,p:50};return(<div style={{display:"flex",flexDirection:"column",gap:4}}><div style={{display:"flex",justifyContent:"space-between",fontSize:10}}><span style={{color:C.text3}}>Nivel</span><span style={{color:cfg.c,fontWeight:800}}>{level}</span></div><div style={{background:C.bg3,borderRadius:6,height:8,overflow:"hidden"}}><div style={{width:`${cfg.p}%`,height:"100%",background:`linear-gradient(90deg,${cfg.c}88,${cfg.c})`,borderRadius:6}}/></div></div>);};
+
+// ── ENGINE ──
+function computeMetrics(d){const{data,width:W,height:H}=d,n=W*H;let vC=0,wC=0,bC=0,sN=0,sG=0,sV=0,sB=0,sCo=0,sE=0,prev=0;const hist=new Array(20).fill(0),rH=new Array(16).fill(0),gH=new Array(16).fill(0),bH=new Array(16).fill(0);for(let i=0;i<n;i++){const rv=data[i*4]/255,g=data[i*4+1]/255,b=data[i*4+2]/255,br=(rv+g+b)/3,ng=(g-rv)/(g+rv+1e-9),nw=(g-b)/(g+b+1e-9),gl=(2*g-rv-b)/(2*g+rv+b+1e-9),va=(g-rv)/(g+rv-b+1e-9);sN+=ng;sG+=gl;sV+=va;sB+=br;sCo+=Math.abs(ng-prev);prev=ng;if(br>0.05&&br<0.95)sE+=-(br*Math.log2(br+1e-9));if(ng>0.05)vC++;else if(nw>0.05)wC++;else bC++;hist[Math.min(Math.max(Math.floor((ng+1)/2*20),0),19)]++;rH[Math.min(Math.floor(rv*16),15)]++;gH[Math.min(Math.floor(g*16),15)]++;bH[Math.min(Math.floor(b*16),15)]++;}const nm=sN/n,ns=Math.sqrt(hist.reduce((s,v,i)=>{const x=(i/20)*2-1;return s+v*(x-nm)**2;},0)/n);return{ndvi_proxy:+nm.toFixed(4),gli:+(sG/n).toFixed(4),vari:+(sV/n).toFixed(4),brightness:+(sB/n).toFixed(3),contrast:+(sCo/n).toFixed(4),entropy:+(sE/n).toFixed(3),ndvi_std:+ns.toFixed(4),cobertura_vegetal_pct:+(vC/n*100).toFixed(1),cobertura_hidrica_pct:+(wC/n*100).toFixed(1),solo_exposto_pct:+(bC/n*100).toFixed(1),ndvi_hist:hist,r_hist:rH,g_hist:gH,b_hist:bH,width:W,height:H,pixels:n,aspect:+(W/H).toFixed(2)};}
+
+function kMeans(px,k=5,it=25){const n=px.length,ctr=[px[Math.floor(Math.random()*n)].slice()];while(ctr.length<k){const ds=px.map(p=>{let m=Infinity;ctr.forEach(c=>{const d=p.reduce((s,v,i)=>s+(v-c[i])**2,0);if(d<m)m=d;});return m;});const t=ds.reduce((a,b)=>a+b,0);let r=Math.random()*t,cu=0;for(let i=0;i<n;i++){cu+=ds[i];if(cu>=r){ctr.push(px[i].slice());break;}}}const lb=new Int32Array(n);for(let i=0;i<it;i++){let ch=0;for(let j=0;j<n;j++){let b=0,bd=Infinity;ctr.forEach((c,ci)=>{const d=px[j].reduce((s,v,k)=>s+(v-c[k])**2,0);if(d<bd){bd=d;b=ci;}});if(lb[j]!==b){lb[j]=b;ch++;}}if(!ch)break;const sm=Array.from({length:k},()=>new Float32Array(3)),cnt=new Int32Array(k);for(let j=0;j<n;j++){px[j].forEach((v,i)=>{sm[lb[j]][i]+=v;});cnt[lb[j]]++;}ctr.forEach((c,ci)=>{if(cnt[ci]>0)c.forEach((_,i)=>{c[i]=sm[ci][i]/cnt[ci];});});}return{labels:lb};}
+
+function makeLULC(id,lb,k){const{width:W,height:H}=id,cv=document.createElement("canvas");cv.width=W;cv.height=H;const ctx=cv.getContext("2d"),out=ctx.createImageData(W,H),cnt=new Array(k).fill(0);for(let i=0;i<lb.length;i++)cnt[lb[i]]++;const ord=cnt.map((c,i)=>({i,c})).sort((a,b)=>b.c-a.c).map(x=>x.i),rm=new Int32Array(k);ord.forEach((o,r)=>{rm[o]=r;});for(let i=0;i<lb.length;i++){const r=rm[lb[i]],[rv,g,b]=PAL[r%PAL.length].c;out.data[i*4]=rv;out.data[i*4+1]=g;out.data[i*4+2]=b;out.data[i*4+3]=210;}ctx.putImageData(out,0,0);const cl=Array.from({length:k},(_,r)=>{const o=ord[r],p=PAL[r%PAL.length];return{nome:p.n,cor:`#${p.c.map(v=>v.toString(16).padStart(2,"0")).join("")}`,area_pct:+(cnt[o]/lb.length*100).toFixed(1)};}).sort((a,b)=>b.area_pct-a.area_pct);return{url:cv.toDataURL("image/png"),classes:cl};}
+
+function makeNDVI(id){const{width:W,height:H,data}=id,cv=document.createElement("canvas");cv.width=W;cv.height=H;const ctx=cv.getContext("2d"),out=ctx.createImageData(W,H),st=[[139,0,0],[255,69,0],[255,215,0],[124,252,0],[0,100,0]],cA=t=>{t=Math.max(0,Math.min(1,t));const s=(st.length-1)*t,lo=Math.floor(s),hi=Math.min(lo+1,st.length-1),f=s-lo;return st[lo].map((v,i)=>Math.round(v+(st[hi][i]-v)*f));};for(let i=0;i<W*H;i++){const g=data[i*4+1]/255,r=data[i*4]/255,v=(g-r)/(g+r+1e-9),[cr,cg,cb]=cA((v+1)/2);out.data[i*4]=cr;out.data[i*4+1]=cg;out.data[i*4+2]=cb;out.data[i*4+3]=220;}ctx.putImageData(out,0,0);return cv.toDataURL("image/png");}
+
+function makeFalse(id){const{width:W,height:H,data}=id,cv=document.createElement("canvas");cv.width=W;cv.height=H;const ctx=cv.getContext("2d"),out=ctx.createImageData(W,H);for(let i=0;i<W*H;i++){const r=data[i*4]/255,g=data[i*4+1]/255,b=data[i*4+2]/255,ng=(g-r)/(g+r+1e-9);out.data[i*4]=Math.round(b*255);out.data[i*4+1]=Math.round(Math.max(0,ng)*255);out.data[i*4+2]=Math.round(r*255);out.data[i*4+3]=220;}ctx.putImageData(out,0,0);return cv.toDataURL("image/png");}
+
+function buildResult(id,mode,model,js,lulcCls,ctx){
+  const veg=js.cobertura_vegetal_pct||0,agua=js.cobertura_hidrica_pct||0,solo=js.solo_exposto_pct||0,ndvi=js.ndvi_proxy||0,gli=js.gli||0,br=js.brightness||0,en=js.entropy||0,co=js.contrast||0;
+  const sv=ndvi>0.2?"Otima":ndvi>0.1?"Boa":ndvi>0?"Regular":"Critica",fR=veg<30?"Alta":veg<60?"Media":"Baixa",eR=solo>40?"Alto":solo>20?"Medio":"Baixo",iR=agua>30?"Alto":agua>10?"Medio":"Baixo",ct=ctx?` Contexto: "${ctx}".`:"",iq=br>0.3&&br<0.75?"Alta":br>0.2&&br<0.85?"Media":"Baixa";
+  const ip={resolucao:`${js.width}x${js.height}px`,pixels:(js.pixels||0).toLocaleString(),aspecto:`${js.aspect}:1`,brilho:`${(br*100).toFixed(1)}%`,contraste:(co*1000).toFixed(2),entropia:en.toFixed(3),qualidade:iq,ndvi_std:(js.ndvi_std||0).toFixed(4)};
+  const rdSat={lulc:[{l:"Veg.",v:veg},{l:"Agua",v:agua},{l:"Solo",v:solo},{l:"Var.",v:Math.min((js.ndvi_std||0)*500,100)},{l:"NDVI",v:Math.max(0,ndvi*100)},{l:"GLI",v:Math.max(0,gli*200)}],telhados:[{l:"Urb.",v:solo},{l:"Brilho",v:br*100},{l:"Dens.",v:solo*0.8},{l:"Veg.",v:veg},{l:"Contr.",v:co*2000},{l:"Entr.",v:en*20}],terreno:[{l:"Veg.",v:veg},{l:"Agua",v:agua},{l:"Solo",v:solo},{l:"NDVI",v:Math.max(0,ndvi*100)},{l:"Brilho",v:br*100},{l:"Textura",v:en*15}],solar:[{l:"Urb.",v:solo},{l:"Telhad.",v:solo*0.7},{l:"Veg.",v:veg},{l:"Brilho",v:br*100},{l:"Sombra",v:(1-br)*50},{l:"Potenc.",v:solo*0.6}],agricultura_prec:[{l:"NDVI",v:Math.max(0,ndvi*150)},{l:"Veg.",v:veg},{l:"Solo",v:solo},{l:"GLI",v:Math.max(0,gli*300)},{l:"Var.",v:Math.min((js.ndvi_std||0)*500,100)},{l:"Agua",v:agua}],desmatamento:[{l:"Veg.",v:veg},{l:"Solo",v:solo},{l:"NDVI",v:Math.max(0,ndvi*100)},{l:"Alerta",v:solo*0.8},{l:"Agua",v:agua},{l:"Var.",v:Math.min((js.ndvi_std||0)*500,100)}],inundacao:[{l:"Agua",v:agua*3},{l:"Solo",v:solo},{l:"Veg.",v:veg},{l:"Risco",v:agua*2},{l:"NDWI",v:Math.max(0,agua/33*100)},{l:"Turb.",v:br*60}],carbono:[{l:"Veg.",v:veg},{l:"NDVI",v:Math.max(0,ndvi*150)},{l:"GLI",v:Math.max(0,gli*300)},{l:"Dens.",v:veg*0.8},{l:"Solo",v:solo},{l:"Agua",v:agua}],spectral:[{l:"NDVI",v:Math.max(0,ndvi*150)},{l:"GLI",v:Math.max(0,gli*300)},{l:"Brilho",v:br*100},{l:"Entr.",v:en*20},{l:"Contr.",v:co*2000},{l:"Agua",v:agua}]};
+  const rd360={buracos:[{l:"Buraco",v:solo*0.5},{l:"Trinca",v:co*2000},{l:"Area",v:solo*0.3},{l:"Sev.",v:br<0.3?80:40},{l:"Risco",v:solo*0.6},{l:"Pav.",v:br*80}],postes:[{l:"Cont.",v:en*20},{l:"Altura",v:br*100},{l:"Estado",v:br*70},{l:"Dens.",v:solo*0.5},{l:"Ilum.",v:br*90},{l:"Risco",v:solo*0.3}],placas_auto:[{l:"LPR",v:co*2000},{l:"OCR",v:br*80},{l:"Ang.",v:en*20},{l:"Conf.",v:br*90},{l:"Vel.",v:co*1500},{l:"Det.",v:en*18}],fachadas:[{l:"Estado",v:br*80},{l:"Dano",v:solo*0.5},{l:"Mater.",v:en*20},{l:"Color",v:br*70},{l:"Idade",v:solo*0.4},{l:"Risco",v:solo*0.5}],rachaduras:[{l:"Trinca",v:co*2500},{l:"Larg.",v:co*2000},{l:"Comp.",v:en*25},{l:"Sev.",v:co*2200},{l:"Risco",v:co*2000},{l:"Estab.",v:br*70}],inspecao_predial:[{l:"Dano",v:solo*0.6},{l:"Infiltr.",v:agua*2},{l:"Trinca",v:co*2000},{l:"Pintura",v:br*70},{l:"Estab.",v:br*80},{l:"Sev.",v:solo*0.5}]};
+  const radar=mode==="360"?(rd360[id]||rd360.buracos):(rdSat[id]||rdSat.spectral);
+  const base={titulo:(mode==="360"?V360:SAT).find(a=>a.id===id)?.label||id,modelo:model,contexto:ctx,imageProfile:ip,lulcClasses:lulcCls,radar,ndvi_hist:js.ndvi_hist,canal_rgb:{r:js.r_hist,g:js.g_hist,b:js.b_hist},classes:lulcCls};
+  const interp=mode==="360"?
+    `Analise ${(V360.find(a=>a.id===id)||{label:id}).label} em imagem 360°. Contraste espectral ${(co*1000).toFixed(2)}, brilho ${(br*100).toFixed(1)}%, entropia ${en.toFixed(3)}, solo exposto ${solo.toFixed(1)}%. Qualidade de imagem: ${iq}. Para deteccao precisa, use modelo fine-tuned com dataset especifico.${ct}`:
+    `Analise ${(SAT.find(a=>a.id===id)||{label:id}).label}. Vegetacao: ${veg.toFixed(1)}%, agua: ${agua.toFixed(1)}%, solo: ${solo.toFixed(1)}%. NDVI proxy=${ndvi.toFixed(3)} (${sv}), GLI=${gli.toFixed(3)}, brilho ${(br*100).toFixed(1)}%, entropia ${en.toFixed(3)}. Variabilidade std=${(js.ndvi_std||0).toFixed(3)}. Qualidade: ${iq}.${ct}`;
+  const alertas=mode==="360"?
+    [co>0.015?"Alto contraste — possiveis defeitos ou feicoes detectaveis":"Contraste moderado — imagem em condicao razoavel",br<0.2||br>0.8?"Brilho fora do ideal — pode afetar acuracia de deteccao":"Brilho adequado para analise"]:
+    [veg<20?"Baixa cobertura vegetal — monitorar degradacao":solo>50?"Alto solo exposto — verificar uso do solo":"Analise concluida — validacao com dados campo recomendada",ndvi<0?"NDVI negativo — area nao vegetada ou urbana densa":"Indices calculados via proxies RGB"];
+  const recs=mode==="360"?
+    ["Use YOLOv8 fine-tuned com dataset especifico para maxima acuracia","Georreferencie cada deteccao com GPS para inventario espacial","Classifique por severidade para priorizar intervencoes","Integre com sistema de gestao municipal para workflow completo"]:
+    ["Use imagens multiespectrais (Sentinel-2/Landsat) para indices reais","Valide resultados com levantamento de campo","Integre dados auxiliares (DEM, precipitacao) para analise completa","Monitore serie temporal para detectar tendencias"];
+  const sc=Math.max(0,100-solo*0.3-Math.abs(br-0.5)*50).toFixed(0);
+  if(mode==="360")return{...base,interpretacao:interp,alertas,recomendacoes:recs,confianca_deteccao:br>0.3&&br<0.8&&co>0.003?"Alta":br>0.2&&co>0.001?"Media":"Baixa",qualidade_imagem:iq,score_geral:sc};
+  if(id==="lulc")return{...base,interpretacao:interp,alertas,recomendacoes:recs,acuracia_estimada:(75+veg*0.1).toFixed(1),kappa_estimado:(0.65+veg*0.001).toFixed(2)};
+  if(id==="vigor")return{...base,interpretacao:interp,alertas,recomendacoes:recs,saude_vegetacao:sv,ndvi_medio:ndvi.toFixed(3),estresse_hidrico_pct:Math.max(0,100-veg*1.2).toFixed(1),biomassa_relativa:veg>60?"Alta":veg>30?"Media":"Baixa"};
+  if(id==="queimadas")return{...base,interpretacao:interp,alertas,recomendacoes:recs,area_queimada_pct:(solo*0.4).toFixed(1),severidade_dominante:solo>40?"Alta":solo>20?"Media":"Baixa",nbr_estimado:(-ndvi*0.8).toFixed(3),risco_requeimada:solo>30?"Alto":solo>15?"Medio":"Baixo"};
+  if(id==="urban")return{...base,interpretacao:interp,alertas,recomendacoes:recs,impermeabilizacao_pct:solo.toFixed(1),risco_ilha_calor:solo>40?"Alto":solo>20?"Medio":"Baixo",vegetacao_urbana_pct:veg.toFixed(1),densidade_construcoes:solo>40?"Alta":solo>20?"Media":"Baixa"};
+  if(id==="hidro")return{...base,interpretacao:interp,alertas,recomendacoes:recs,cobertura_hidrica_pct:agua.toFixed(1),risco_inundacao:iR,ndwi_estimado:(agua/100*.6).toFixed(3),qualidade_aparente:agua>20?"Regular":"Boa"};
+  if(id==="saneamento")return{...base,interpretacao:interp,alertas,recomendacoes:recs,cobertura_hidrica_pct:agua.toFixed(1),risco_contaminacao:(agua>15&&ndvi<0.05)?"Alto":solo>35?"Medio":"Baixo",turbidez_estimada:agua>20?"Alta":agua>8?"Media":"Baixa",cobertura_sanitaria_est:solo>40?"Deficiente":solo>20?"Parcial":"Adequada"};
+  if(id==="floresta")return{...base,interpretacao:interp,alertas,recomendacoes:recs,cobertura_total_pct:veg.toFixed(1),fragmentacao:fR,conectividade:veg>50?"Alta":veg>25?"Media":"Baixa",clareiras_pct:(solo*.3).toFixed(1)};
+  if(id==="erosao")return{...base,interpretacao:interp,alertas,recomendacoes:recs,risco_erosivo:eR,solo_exposto_pct:solo.toFixed(1),indice_integridade:(veg/100).toFixed(2),pressao_antropica:solo>40?"Alta":solo>20?"Media":"Baixa"};
+  return{...base,interpretacao:interp,alertas,recomendacoes:recs,cobertura_vegetal_pct:veg.toFixed(1),cobertura_hidrica_pct:agua.toFixed(1),solo_exposto_pct:solo.toFixed(1)};
+}
+
+// ── REPORT ──
+function ReportPage({result,jsMetrics:js,lulcUrl,ndviUrl,origUrl,falseUrl,analysis,model,image,mode,onBack,onNew}){
+  const[tab,setTab]=useState("overview");
+  const r=result||{},veg=js?.cobertura_vegetal_pct||0,agua=js?.cobertura_hidrica_pct||0,solo=js?.solo_exposto_pct||0,br=js?.brightness||0;
+  const is360=mode==="360",ac=is360?C.purple:C.cyan;
+  const kpis=is360?[["Confianca",r.confianca_deteccao||"-",C.green,"🎯"],["Score",r.score_geral||"-",C.cyan,"⭐"],["Qualidade",r.qualidade_imagem||"-",C.blue2,"📷"],["Solo",`${solo.toFixed(1)}%`,C.orange,"🏜️"]]:[["Vegetacao",`${veg.toFixed(1)}%`,C.green,"🌿"],["Agua",`${agua.toFixed(1)}%`,C.cyan,"💧"],["Solo",`${solo.toFixed(1)}%`,C.orange,"🏜️"],["NDVI",js?.ndvi_proxy?.toFixed(3)||"-",C.teal,"📈"]];
+  const tabs=[["overview","📋 Geral"],["charts","📊 Graficos"],["maps","🗺️ Mapas"],["report","📄 Relatorio"]];
+  return(
+    <div style={{minHeight:"100vh",background:C.bg,fontFamily:"Segoe UI,sans-serif",display:"flex",flexDirection:"column"}}>
+      <div style={{background:C.bg2,borderBottom:`1px solid ${C.border}`,padding:"0 14px",height:52,display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+        <div style={{width:30,height:30,background:`linear-gradient(135deg,${is360?C.purple:C.blue},${is360?C.pink:C.cyan})`,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>{is360?"🔄":"🛰️"}</div>
+        {image&&<img src={image.url} alt="" style={{width:30,height:30,objectFit:"cover",borderRadius:5,border:`1px solid ${C.green}`}}/>}
+        <div style={{flex:1,minWidth:0}}><div style={{fontSize:11,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{analysis?.icon} {analysis?.label}</div><div style={{fontSize:9,color:C.text3}}>{model} · {is360?"360°":"Sat/Drone"} · {image?.name}</div></div>
+        <Pill color={C.green}>✅ OK</Pill>
+        <Btn variant="secondary" style={{fontSize:10,padding:"4px 9px"}} onClick={onNew}>+ Nova</Btn>
+        <Btn variant="ghost" style={{fontSize:10,padding:"4px 9px"}} onClick={onBack}>← App</Btn>
+      </div>
+      <div style={{background:C.bg2,borderBottom:`1px solid ${C.border}`,display:"flex",padding:"0 10px",flexShrink:0,overflowX:"auto"}}>
+        {tabs.map(([id2,lb])=><button key={id2} onClick={()=>setTab(id2)} style={{padding:"10px 14px",fontSize:11,fontWeight:600,cursor:"pointer",border:"none",borderBottom:`2px solid ${tab===id2?ac:"transparent"}`,background:"transparent",color:tab===id2?ac:C.text3,whiteSpace:"nowrap"}}>{lb}</button>)}
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:16}}>
+        {tab==="overview"&&(
+          <div style={{display:"flex",flexDirection:"column",gap:12,maxWidth:1100,margin:"0 auto"}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:9}}>
+              {kpis.map(([lb,val,color,icon])=><Card key={lb} style={{padding:14,textAlign:"center"}}><div style={{fontSize:20,marginBottom:3}}>{icon}</div><div style={{fontSize:18,fontWeight:800,color,marginBottom:2}}>{val}</div><div style={{fontSize:9,color:C.text3,textTransform:"uppercase"}}>{lb}</div></Card>)}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:9}}>
+              <Card style={{padding:12}}><div style={{fontSize:11,fontWeight:700,color:ac,marginBottom:9}}>Cobertura</div><div style={{display:"flex",justifyContent:"space-around",flexWrap:"wrap"}}><Gauge value={veg} max={100} color={C.green} label="Veg." unit="%"/><Gauge value={agua} max={100} color={C.cyan} label="Agua" unit="%"/><Gauge value={solo} max={100} color={C.orange} label="Solo" unit="%"/></div></Card>
+              <Card style={{padding:12}}><div style={{fontSize:11,fontWeight:700,color:ac,marginBottom:9}}>Distribuicao</div><div style={{display:"flex",alignItems:"center",justifyContent:"space-around",gap:6}}><Donut size={110} slices={[{l:"Veg.",v:veg,c:C.green},{l:"Solo",v:solo,c:C.orange},{l:"Agua",v:agua,c:C.cyan}]}/><div style={{display:"flex",flexDirection:"column",gap:5}}>{[{l:"Vegetacao",v:veg,c:C.green},{l:"Solo",v:solo,c:C.orange},{l:"Agua",v:agua,c:C.cyan}].map(s=><div key={s.l} style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:s.c,flexShrink:0}}/><span style={{fontSize:9,color:C.text2,flex:1}}>{s.l}</span><span style={{fontSize:9,fontWeight:700,color:s.c}}>{s.v.toFixed(1)}%</span></div>)}</div></div></Card>
+              <Card style={{padding:12}}><div style={{fontSize:11,fontWeight:700,color:ac,marginBottom:9}}>Indices</div><div style={{display:"flex",flexDirection:"column",gap:6}}>{[["NDVI",(js?.ndvi_proxy||0),1,C.green],["GLI",(js?.gli||0),.3,C.teal],["Brilho",(br),1,C.yellow],["Entropia",(js?.entropy||0)/5,1,C.purple]].map(([l,v,mx,c])=><div key={l}><div style={{display:"flex",justifyContent:"space-between",fontSize:9,marginBottom:2}}><span style={{color:C.text2}}>{l}</span><span style={{color:c,fontWeight:700}}>{(v*(l==="Entropia"?5:1)).toFixed(4)}</span></div><div style={{background:C.bg3,borderRadius:4,height:5}}><div style={{width:`${Math.min(Math.max((v/mx+1)/2*100,2),100)}%`,height:"100%",background:c,borderRadius:4}}/></div></div>)}</div></Card>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
+              <Card><div style={{fontSize:11,fontWeight:700,color:C.orange,marginBottom:9}}>⚠️ Alertas</div>{(r.alertas||[]).map((a,i)=><div key={i} style={{display:"flex",gap:7,padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,.04)",fontSize:11,color:C.text2,lineHeight:1.6}}><span style={{color:C.orange,flexShrink:0}}>▸</span>{a}</div>)}</Card>
+              <Card><div style={{fontSize:11,fontWeight:700,color:ac,marginBottom:9}}>🏷️ Classes K-Means</div><div style={{display:"flex",height:11,borderRadius:4,overflow:"hidden",gap:1,marginBottom:9}}>{(r.classes||r.lulcClasses||[]).map((c,i)=><div key={i} style={{flex:c.area_pct||1,background:c.cor||"#888"}} title={c.nome}/>)}</div>{(r.classes||r.lulcClasses||[]).map((c,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:7,padding:"4px 0",borderBottom:"1px solid rgba(255,255,255,.04)"}}><div style={{width:9,height:9,borderRadius:2,background:c.cor||"#888",flexShrink:0}}/><span style={{flex:1,fontSize:11}}>{c.nome||`Classe ${i+1}`}</span><span style={{fontSize:11,fontWeight:700,color:c.cor||C.text,minWidth:34,textAlign:"right"}}>{c.area_pct}%</span></div>)}</Card>
+            </div>
+          </div>
+        )}
+        {tab==="charts"&&(
+          <div style={{display:"flex",flexDirection:"column",gap:12,maxWidth:1100,margin:"0 auto"}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:9}}>
+              <Card style={{padding:12}}><div style={{fontSize:11,fontWeight:700,color:ac,marginBottom:9}}>🕸️ Radar</div><div style={{display:"flex",justifyContent:"center"}}><RadarChart items={r.radar||[]} size={170}/></div></Card>
+              <Card style={{padding:12}}><div style={{fontSize:11,fontWeight:700,color:ac,marginBottom:9}}>📊 Histograma NDVI</div><NDVIHist hist={js?.ndvi_hist}/><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:5,marginTop:9}}>{[["Media",js?.ndvi_proxy?.toFixed(4),C.green],["Std",js?.ndvi_std?.toFixed(4),C.yellow],["GLI",js?.gli?.toFixed(4),C.teal]].map(([l,v,c])=><div key={l} style={{background:C.bg3,borderRadius:5,padding:"5px 7px",textAlign:"center"}}><div style={{fontSize:10,fontWeight:700,color:c}}>{v||"-"}</div><div style={{fontSize:8,color:C.text3}}>{l}</div></div>)}</div></Card>
+              <Card style={{padding:12}}><div style={{fontSize:11,fontWeight:700,color:ac,marginBottom:9}}>📏 Metricas</div><div style={{display:"flex",flexDirection:"column",gap:7}}>{[["Brilho",((js?.brightness||0)*100).toFixed(1)+"%",C.yellow,js?.brightness||0],["Contraste",((js?.contrast||0)*1000).toFixed(2),C.orange,(js?.contrast||0)*20],["Entropia",((js?.entropy||0)).toFixed(3),C.purple,(js?.entropy||0)/5],["NDVI Std",(js?.ndvi_std||0).toFixed(4),C.cyan,(js?.ndvi_std||0)*5]].map(([l,v,c,p])=><div key={l}><div style={{display:"flex",justifyContent:"space-between",fontSize:9,marginBottom:2}}><span style={{color:C.text2}}>{l}</span><span style={{color:c,fontWeight:700}}>{v}</span></div><div style={{background:C.bg3,borderRadius:4,height:5}}><div style={{width:`${Math.min(p*100,100)}%`,height:"100%",background:c,borderRadius:4}}/></div></div>)}</div></Card>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:9}}>
+              <Card style={{padding:12}}><div style={{fontSize:11,fontWeight:700,color:ac,marginBottom:9}}>🌈 Histograma RGB</div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>{[["R",js?.r_hist,C.red],["G",js?.g_hist,C.green],["B",js?.b_hist,C.blue2]].map(([l,h,c])=><div key={l}><div style={{fontSize:9,color:C.text3,marginBottom:3,fontWeight:600}}>Canal {l}</div><div style={{display:"flex",alignItems:"flex-end",height:45,gap:.5}}>{(h||[]).map((v,i)=>{const mx=Math.max(...(h||[1]),1);return <div key={i} style={{flex:1,height:`${(v/mx)*100}%`,background:c,borderRadius:"1px 1px 0 0",minHeight:1,opacity:.6+i*.025}}/>;})}</div></div>)}</div></Card>
+              <Card style={{padding:12}}><div style={{fontSize:11,fontWeight:700,color:ac,marginBottom:9}}>🚦 Riscos</div><div style={{display:"flex",flexDirection:"column",gap:9}}>{[["Pressao Humana",solo>40?"Alto":solo>20?"Medio":"Baixo"],["Cobertura Veg.",veg>60?"Adequada":veg>30?"Parcial":"Deficiente"],["Qualidade Img",r.imageProfile?.qualidade||"Media"]].map(([l,v])=><div key={l}><div style={{fontSize:9,color:C.text2,marginBottom:2}}>{l}</div><RiskM level={v}/></div>)}</div></Card>
+            </div>
+          </div>
+        )}
+        {tab==="maps"&&(
+          <div style={{display:"flex",flexDirection:"column",gap:10,maxWidth:1100,margin:"0 auto"}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              {[[origUrl,"📷 Original",ac],[lulcUrl,"🌍 LULC K-Means",C.green],[ndviUrl,"📈 NDVI RdYlGn",C.teal],[falseUrl,"🔴 Falsa Cor",C.pink]].map(([url,lb,c])=>url&&<Card key={lb} style={{padding:0,overflow:"hidden"}}><div style={{padding:"7px 11px",background:C.bg3,borderBottom:`1px solid ${C.border}`,fontSize:10,fontWeight:700,color:c}}>{lb}</div><img src={url} alt={lb} style={{width:"100%",display:"block",maxHeight:260,objectFit:"contain",background:"#000"}}/></Card>)}
+            </div>
+            <Card style={{padding:12}}><div style={{fontSize:11,fontWeight:700,color:ac,marginBottom:9}}>Legenda LULC</div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:7}}>{(r.classes||r.lulcClasses||[]).map((cl,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:7,background:C.bg3,borderRadius:6,padding:"7px 9px",border:`1px solid ${C.border}`}}><div style={{width:12,height:12,borderRadius:3,background:cl.cor,flexShrink:0}}/><div style={{flex:1}}><div style={{fontSize:10,fontWeight:600}}>{cl.nome}</div><div style={{fontSize:8,color:C.text3}}>{cl.area_pct}%</div></div></div>)}</div></Card>
+          </div>
+        )}
+        {tab==="report"&&(
+          <div style={{display:"flex",flexDirection:"column",gap:12,maxWidth:880,margin:"0 auto"}}>
+            <div style={{background:`linear-gradient(135deg,rgba(${is360?"168,85,247":"30,127,255"},.1),rgba(${is360?"255,110,180":"0,212,255"},.05))`,border:`1px solid ${C.border2}`,borderRadius:12,padding:"18px 22px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:9}}>
+                <div><div style={{fontSize:9,color:ac,textTransform:"uppercase",letterSpacing:1.5,marginBottom:3}}>TerraLens AI v4.0 · {is360?"Analise 360°":"Sensoriamento Remoto"}</div><div style={{fontSize:18,fontWeight:800,marginBottom:3}}>{analysis?.icon} {r.titulo||analysis?.label}</div><div style={{fontSize:10,color:C.text2}}>Modelo: <span style={{color:ac,fontWeight:700}}>{model}</span> · {image?.name} · {image?.size}</div>{r.contexto&&<div style={{fontSize:9,color:C.text3,marginTop:2}}>Contexto: {r.contexto}</div>}</div>
+                <div style={{display:"flex",flexDirection:"column",gap:3,alignItems:"flex-end"}}><Pill color={C.green}>✅ Concluido</Pill><Pill color={is360?C.purple:C.cyan}>{is360?"🔄 360°":"🛰️ Sat/Drone"}</Pill><span style={{fontSize:9,color:C.text3}}>{new Date().toLocaleString("pt-BR")}</span></div>
+              </div>
+            </div>
+            {[["1. Indicadores",<div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7}}>{kpis.map(([l,v,c,ic])=><Card key={l} style={{padding:10,textAlign:"center"}}><div style={{fontSize:16}}>{ic}</div><div style={{fontSize:14,fontWeight:800,color:c,margin:"3px 0"}}>{v}</div><div style={{fontSize:8,color:C.text3,textTransform:"uppercase"}}>{l}</div></Card>)}</div>,ac],
+              ["2. Perfil da Imagem",<Card><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>{r.imageProfile&&Object.entries(r.imageProfile).map(([k,v])=><div key={k} style={{display:"flex",justifyContent:"space-between",padding:"4px 7px",background:C.bg3,borderRadius:4,fontSize:10}}><span style={{color:C.text3,textTransform:"capitalize"}}>{k.replace(/_/g," ")}</span><span style={{color:C.text,fontWeight:700}}>{v}</span></div>)}</div></Card>,ac],
+              ["3. Interpretacao",<Card style={{background:`rgba(${is360?"168,85,247":"30,127,255"},.04)`,borderColor:`rgba(${is360?"168,85,247":"30,127,255"},.25)`}}><div style={{fontSize:12,color:C.text2,lineHeight:1.85}}>{r.interpretacao}</div></Card>,ac],
+              ["4. Classes Identificadas",<Card><div style={{display:"flex",height:12,borderRadius:4,overflow:"hidden",gap:1,marginBottom:10}}>{(r.classes||r.lulcClasses||[]).map((c,i)=><div key={i} style={{flex:c.area_pct||1,background:c.cor||"#888"}} title={c.nome}/>)}</div>{(r.classes||r.lulcClasses||[]).map((c,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:9,padding:"5px 0",borderBottom:"1px solid rgba(255,255,255,.04)"}}><div style={{width:10,height:10,borderRadius:2,background:c.cor||"#888",flexShrink:0}}/><span style={{flex:1,fontSize:11,fontWeight:600}}>{c.nome||`Classe ${i+1}`}</span><span style={{fontSize:11,fontWeight:700,color:c.cor||C.text}}>{c.area_pct}%</span></div>)}</Card>,ac],
+              ["5. Alertas",<div>{(r.alertas||[]).map((a,i)=><div key={i} style={{background:"rgba(255,159,28,.06)",border:"1px solid rgba(255,159,28,.3)",borderRadius:7,padding:"9px 13px",fontSize:11,color:C.orange,display:"flex",gap:7,marginBottom:5}}><span style={{flexShrink:0}}>⚠️</span>{a}</div>)}</div>,C.orange],
+              ["6. Recomendacoes",<Card>{(r.recomendacoes||[]).map((rc,i)=><div key={i} style={{display:"flex",gap:9,padding:"7px 0",borderBottom:"1px solid rgba(255,255,255,.04)",fontSize:11,color:C.text2,lineHeight:1.65}}><span style={{background:`linear-gradient(135deg,${is360?C.purple:C.blue},${is360?C.pink:C.cyan})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",fontWeight:800,flexShrink:0,minWidth:16}}>{i+1}.</span>{rc}</div>)}</Card>,C.green],
+            ].map(([title,content,color])=><div key={title}><div style={{fontSize:9,fontWeight:700,color,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>{title}</div>{content}</div>)}
+            <div style={{textAlign:"center",padding:"8px",fontSize:9,color:C.text3,borderTop:`1px solid ${C.border}`}}>TerraLens AI v4.0 · {new Date().toLocaleString("pt-BR")} · 100% Front-End</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── APP ──
+function App(){
+  const[page,setPage]=useState("landing");
+  const[mode,setMode]=useState("sat");
+  const[image,setImage]=useState(null);
+  const[analysis,setAnalysis]=useState(null);
+  const[model,setModel]=useState(null);
+  const[selIdx,setSelIdx]=useState(null);
+  const[nClass,setNClass]=useState(5);
+  const[context,setContext]=useState("");
+  const[showModal,setShowModal]=useState(false);
+  const[pct,setPct]=useState(0);
+  const[pStep,setPStep]=useState("");
+  const[running,setRunning]=useState(false);
+  const[result,setResult]=useState(null);
+  const[jsM,setJsM]=useState(null);
+  const[lulcUrl,setLulcUrl]=useState(null);
+  const[lulcCls,setLulcCls]=useState([]);
+  const[ndviUrl,setNdviUrl]=useState(null);
+  const[falseUrl,setFalseUrl]=useState(null);
+  const[origUrl,setOrigUrl]=useState(null);
+  const[drag,setDrag]=useState(false);
+  const[catF,setCatF]=useState("Todas");
+  const fileRef=useRef();
+  const is360=mode==="360",ac=is360?C.purple:C.cyan;
+  const ANALYSES=is360?V360:SAT;
+  const cats=["Todas",...[...new Set(ANALYSES.map(a=>a.cat))]];
+  const filtered=catF==="Todas"?ANALYSES:ANALYSES.filter(a=>a.cat===catF);
+
+  const handleFile=f=>{if(!f)return;const r=new FileReader();r.onload=e=>setImage({url:e.target.result,base64:e.target.result.split(",")[1],mediaType:f.type||"image/jpeg",name:f.name,size:(f.size/1048576).toFixed(2)+" MB"});r.readAsDataURL(f);};
+
+  const run=()=>{
+    if(!image||!analysis||!model)return;
+    setShowModal(false);setRunning(true);setPct(0);
+    const img=new Image();
+    img.onload=()=>{
+      const MAX=520,sc=Math.min(MAX/Math.max(img.width,img.height),1),W=Math.round(img.width*sc),H=Math.round(img.height*sc),cv=document.createElement("canvas");cv.width=W;cv.height=H;cv.getContext("2d").drawImage(img,0,0,W,H);
+      const idata=cv.getContext("2d").getImageData(0,0,W,H);
+      setPct(20);setPStep("Calculando metricas...");
+      setTimeout(()=>{
+        const jm=computeMetrics(idata);setJsM(jm);
+        setPct(45);setPStep("K-Means LULC...");
+        setTimeout(()=>{
+          const px=[];for(let i=0;i<W*H;i++)px.push([idata.data[i*4]/255,idata.data[i*4+1]/255,idata.data[i*4+2]/255]);
+          const{labels}=kMeans(px,nClass,25),lulc=makeLULC(idata,labels,nClass);
+          setLulcUrl(lulc.url);setLulcCls(lulc.classes);
+          setPct(70);setPStep("Gerando mapas...");
+          setTimeout(()=>{
+            setNdviUrl(makeNDVI(idata));setFalseUrl(makeFalse(idata));setOrigUrl(cv.toDataURL("image/jpeg",.9));
+            setPct(90);setPStep("Compilando relatorio...");
+            setTimeout(()=>{
+              const res=buildResult(analysis.id,mode,model,jm,lulc.classes,context);
+              setPct(100);setPStep("Concluido!");setResult(res);
+              setTimeout(()=>{setRunning(false);setPage("results");},350);
+            },400);
+          },300);
+        },400);
+      },300);
+    };
+    setPct(5);setPStep("Carregando...");img.src=image.url;
+  };
+
+  const resetAll=()=>{setImage(null);setAnalysis(null);setModel(null);setSelIdx(null);setResult(null);setJsM(null);setLulcUrl(null);setLulcCls([]);setNdviUrl(null);setFalseUrl(null);setOrigUrl(null);setContext("");setCatF("Todas");};
+
+  if(running)return(
+    <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Segoe UI,sans-serif"}}>
+      <div style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:14,padding:30,width:420,textAlign:"center"}}>
+        <div style={{fontSize:34,marginBottom:9}}>{is360?"🔄":"⚙️"}</div>
+        <div style={{fontSize:15,fontWeight:800,marginBottom:3}}>{analysis?.label}</div>
+        <div style={{fontSize:10,color:C.text2,marginBottom:18}}>{model} · TerraLens AI v4.0 · {is360?"360°":"Sat/Drone"}</div>
+        <div style={{background:C.bg3,borderRadius:10,height:11,overflow:"hidden",marginBottom:7}}>
+          <div style={{height:"100%",width:`${pct}%`,background:`linear-gradient(90deg,${is360?C.purple:C.blue},${is360?C.pink:C.cyan})`,borderRadius:10,transition:"width .4s"}}/>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:14}}>
+          <span style={{color:C.text2}}>{pStep}</span><span style={{color:ac,fontWeight:800}}>{pct}%</span>
+        </div>
+        {image&&<img src={image.url} alt="" style={{width:"100%",maxHeight:150,objectFit:"cover",borderRadius:8,border:`1px solid ${C.border}`,opacity:.6}}/>}
+      </div>
+    </div>
+  );
+
+  if(page==="results")return <ReportPage result={result} jsMetrics={jsM} lulcUrl={lulcUrl} ndviUrl={ndviUrl} origUrl={origUrl} falseUrl={falseUrl} analysis={analysis} model={model} image={image} mode={mode} onBack={()=>setPage("app")} onNew={()=>{setPage("app");resetAll();}}/>;
+
+  if(page==="landing")return(
+    <div style={{minHeight:"100vh",background:C.bg,fontFamily:"Segoe UI,sans-serif",overflowY:"auto"}}>
+      <div style={{background:C.bg2,borderBottom:`1px solid ${C.border}`,padding:"0 20px",height:54,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:10}}>
+        <div style={{display:"flex",alignItems:"center",gap:9}}>
+          <div style={{width:32,height:32,background:`linear-gradient(135deg,${C.blue},${C.cyan})`,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17}}>🛰️</div>
+          <div><div style={{fontSize:14,fontWeight:800}}><span style={{color:"#fff"}}>TerraLens </span><span style={{background:`linear-gradient(90deg,${C.blue2},${C.cyan})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>AI</span></div><div style={{fontSize:8,color:C.text3,textTransform:"uppercase",letterSpacing:1}}>Geospatial + 360° v4.0</div></div>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <Btn variant="secondary" style={{padding:"6px 13px",fontSize:11}} onClick={()=>{setMode("sat");setPage("app");}}>🛰️ Satelite</Btn>
+          <Btn style={{padding:"6px 13px",fontSize:11,background:`linear-gradient(135deg,${C.purple},${C.pink})`}} onClick={()=>{setMode("360");setPage("app");}}>🔄 360°</Btn>
+        </div>
+      </div>
+      <div style={{minHeight:"72vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center",padding:"36px 18px",position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",inset:0,backgroundImage:`linear-gradient(rgba(30,127,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(30,127,255,.04) 1px,transparent 1px)`,backgroundSize:"44px 44px"}}/>
+        <div style={{position:"relative",zIndex:1,maxWidth:780}}>
+          <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"rgba(30,127,255,.08)",border:`1px solid rgba(30,127,255,.28)`,borderRadius:20,padding:"4px 14px",fontSize:10,color:C.cyan,marginBottom:18}}>🛰️ Satelite/Drone · 🔄 Imagens 360° · 📊 Relatorios · IA Geoespacial v4.0</div>
+          <h1 style={{fontSize:"clamp(22px,4.5vw,46px)",fontWeight:800,lineHeight:1.1,marginBottom:14}}><span style={{color:"#fff"}}>Inteligencia Geoespacial </span><span style={{background:`linear-gradient(90deg,${C.blue2},${C.cyan})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>Imbativel</span></h1>
+          <p style={{fontSize:13,color:C.text2,lineHeight:1.8,marginBottom:24}}>21 analises de satelite/drone · 14 analises de imagens 360° · Relatorio tecnico completo<br/>100% no navegador · Zero instalacao · Zero cadastro</p>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,maxWidth:580,margin:"0 auto 24px"}}>
+            {[[C.cyan,C.blue,"sat","🛰️","Satelite / Drone","21 analises geoespaciais",["LULC","Telhados","Solar","Carbono","Vetorizacao","+16"]],[C.purple,C.pink,"360","🔄","Imagens 360°","14 analises urbanas",["Buracos","Postes","LPR","Fachadas","Rachaduras","+9"]]].map(([ac,ac2,m,ic,title,sub,tags])=>(
+              <div key={m} onClick={()=>{setMode(m);setPage("app");}} style={{background:`linear-gradient(135deg,rgba(${m==="sat"?"30,127,255":"168,85,247"},.1),transparent)`,border:`2px solid ${ac}`,borderRadius:12,padding:"18px 14px",cursor:"pointer",textAlign:"center"}}>
+                <div style={{fontSize:32,marginBottom:6}}>{ic}</div>
+                <div style={{fontSize:14,fontWeight:800,color:ac,marginBottom:3}}>{title}</div>
+                <div style={{fontSize:10,color:C.text2,marginBottom:9}}>{sub}</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:3,justifyContent:"center"}}>{tags.map(t=><span key={t} style={{padding:"2px 7px",borderRadius:8,fontSize:8,fontWeight:700,background:`${ac}18`,color:ac,border:`1px solid ${ac}35`}}>{t}</span>)}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{display:"inline-flex",border:`1px solid ${C.border}`,borderRadius:10,background:C.panel,overflow:"hidden",flexWrap:"wrap"}}>
+            {[["21","Sat/Drone"],["14","360°"],["4","Mapas"],["100%","Front-End"]].map(([n,l],i,arr)=>(
+              <div key={l} style={{textAlign:"center",padding:"10px 16px",borderRight:i<arr.length-1?`1px solid ${C.border}`:"none"}}>
+                <div style={{fontSize:15,fontWeight:800,background:`linear-gradient(90deg,${C.blue2},${C.cyan})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{n}</div>
+                <div style={{fontSize:9,color:C.text3,marginTop:1,textTransform:"uppercase"}}>{l}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div style={{background:C.panel,borderTop:`1px solid ${C.border}`,padding:"24px 20px"}}>
+        <div style={{maxWidth:1200,margin:"0 auto"}}>
+          <div style={{fontSize:10,color:C.cyan,textTransform:"uppercase",letterSpacing:1.5,marginBottom:3,textAlign:"center"}}>🛰️ SATELITE / DRONE / GOOGLE EARTH — 21 ANALISES</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(155px,1fr))",gap:6,marginBottom:24}}>
+            {SAT.map(a=><Card key={a.id} style={{cursor:"pointer",padding:10}} onClick={()=>{setMode("sat");setAnalysis(a);setPage("app");}}><div style={{fontSize:15,marginBottom:3}}>{a.icon}</div><div style={{fontSize:10,fontWeight:700,marginBottom:2}}>{a.label}</div><div style={{fontSize:8,color:C.text2,marginBottom:4,lineHeight:1.3}}>{a.desc}</div><div style={{display:"flex",gap:2,flexWrap:"wrap"}}>{a.tags.map(t=><Tag key={t} t={t}/>)}</div></Card>)}
+          </div>
+          <div style={{fontSize:10,color:C.purple,textTransform:"uppercase",letterSpacing:1.5,marginBottom:3,textAlign:"center"}}>🔄 IMAGENS 360° — STREET VIEW / INSPEÇÃO — 14 ANALISES</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(155px,1fr))",gap:6}}>
+            {V360.map(a=><Card key={a.id} style={{cursor:"pointer",padding:10,border:"1px solid rgba(168,85,247,.25)",background:"rgba(168,85,247,.04)"}} onClick={()=>{setMode("360");setAnalysis(a);setPage("app");}}><div style={{fontSize:15,marginBottom:3}}>{a.icon}</div><div style={{fontSize:10,fontWeight:700,marginBottom:2}}>{a.label}</div><div style={{fontSize:8,color:C.text2,marginBottom:4,lineHeight:1.3}}>{a.desc}</div><div style={{display:"flex",gap:2,flexWrap:"wrap"}}>{a.tags.map(t=><Tag key={t} t={t}/>)}</div></Card>)}
+          </div>
+        </div>
+      </div>
+      <div style={{padding:"18px",textAlign:"center",borderTop:`1px solid ${C.border}`}}>
+        <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
+          <Btn style={{fontSize:13,padding:"10px 24px"}} onClick={()=>{setMode("sat");setPage("app");}}>🛰️ Satelite / Drone</Btn>
+          <Btn style={{fontSize:13,padding:"10px 24px",background:`linear-gradient(135deg,${C.purple},${C.pink})`}} onClick={()=>{setMode("360");setPage("app");}}>🔄 Imagens 360°</Btn>
+        </div>
+        <div style={{fontSize:9,color:C.text3,marginTop:7}}>TerraLens AI v4.0 · 35 Analises · Vercel Ready · 100% Front-End</div>
+      </div>
+    </div>
+  );
+
+  // ── APP PAGE ──
+  return(
+    <div style={{minHeight:"100vh",background:C.bg,fontFamily:"Segoe UI,sans-serif"}}>
+      <div style={{background:C.bg2,borderBottom:`1px solid ${C.border}`,padding:"0 16px",height:52,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer"}} onClick={()=>setPage("landing")}>
+          <div style={{width:30,height:30,background:`linear-gradient(135deg,${is360?C.purple:C.blue},${is360?C.pink:C.cyan})`,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>{is360?"🔄":"🛰️"}</div>
+          <div style={{fontSize:13,fontWeight:800}}><span style={{color:"#fff"}}>TerraLens </span><span style={{background:`linear-gradient(90deg,${is360?C.purple:C.blue2},${is360?C.pink:C.cyan})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>AI</span></div>
+        </div>
+        <div style={{display:"flex",gap:5}}>
+          <button onClick={()=>{setMode("sat");setAnalysis(null);setCatF("Todas");}} style={{padding:"4px 10px",borderRadius:6,fontSize:10,fontWeight:700,cursor:"pointer",background:!is360?"rgba(0,212,255,.15)":"transparent",border:`1px solid ${!is360?C.cyan:C.border}`,color:!is360?C.cyan:C.text3}}>🛰️ Sat</button>
+          <button onClick={()=>{setMode("360");setAnalysis(null);setCatF("Todas");}} style={{padding:"4px 10px",borderRadius:6,fontSize:10,fontWeight:700,cursor:"pointer",background:is360?"rgba(168,85,247,.15)":"transparent",border:`1px solid ${is360?C.purple:C.border}`,color:is360?C.purple:C.text3}}>🔄 360°</button>
+        </div>
+      </div>
+      <div style={{display:"flex",minHeight:"calc(100vh - 52px)"}}>
+        <div style={{width:295,flexShrink:0,padding:16,borderRight:`1px solid ${C.border}`,display:"flex",flexDirection:"column",gap:11,overflowY:"auto"}}>
+          <div><div style={{fontSize:14,fontWeight:700,marginBottom:2}}>Nova Analise</div><div style={{fontSize:10,color:C.text2}}>{is360?"360° · Street View · Inspecao":"Satelite · Drone · Google Earth"}</div></div>
+          <div>
+            <div style={{fontSize:9,fontWeight:700,color:ac,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>1. Imagem</div>
+            <div onDragOver={e=>{e.preventDefault();setDrag(true);}} onDragLeave={()=>setDrag(false)} onDrop={e=>{e.preventDefault();setDrag(false);handleFile(e.dataTransfer.files[0]);}} onClick={()=>fileRef.current.click()} style={{border:`2px dashed ${drag?ac:image?C.green:C.border2}`,borderRadius:10,padding:image?"10px":"18px 12px",textAlign:"center",cursor:"pointer",transition:".2s"}}>
+              <input ref={fileRef} type="file" accept="image/*,.tif,.tiff" style={{display:"none"}} onChange={e=>handleFile(e.target.files[0])}/>
+              {image?(<div style={{display:"flex",alignItems:"center",gap:8}}><img src={image.url} alt="" style={{width:64,height:48,objectFit:"cover",borderRadius:5,border:`1px solid ${C.green}`,flexShrink:0}}/><div style={{textAlign:"left"}}><div style={{fontSize:10,fontWeight:700,color:C.green}}>{image.name}</div><div style={{fontSize:9,color:C.text3}}>{image.size}</div><div style={{fontSize:9,color:C.text3}}>Clique para trocar</div></div></div>)
+              :(<><div style={{fontSize:24,marginBottom:5}}>{is360?"🔄":"🛰️"}</div><div style={{fontSize:11,fontWeight:700,marginBottom:2}}>Arraste ou clique</div><div style={{fontSize:9,color:C.text2,marginBottom:5}}>{is360?"360° · Street View · Fachadas":"Satelite · Drone · Google Earth"}</div><div style={{display:"flex",flexWrap:"wrap",gap:3,justifyContent:"center"}}>{["PNG","JPG","TIFF","WebP"].map(f=><span key={f} style={{padding:"1px 6px",borderRadius:7,fontSize:8,fontWeight:700,background:C.bg3,border:`1px solid ${C.border2}`,color:C.text2}}>{f}</span>)}</div></>)}
+            </div>
+          </div>
+          <div>
+            <div style={{fontSize:9,fontWeight:700,color:ac,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>2. Contexto (opcional)</div>
+            <textarea value={context} onChange={e=>setContext(e.target.value)} placeholder={is360?"Ex: Camera Ricoh Theta, via coletora, SP, 2024...":"Ex: Sentinel-2, soja, MT, 10m/px, 2024..."} style={{width:"100%",background:C.bg3,border:`1px solid ${C.border}`,borderRadius:6,padding:"6px 8px",color:C.text,fontSize:10,resize:"vertical",minHeight:44,outline:"none",lineHeight:1.6,fontFamily:"inherit",boxSizing:"border-box"}}/>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div style={{fontSize:9,fontWeight:700,color:ac,textTransform:"uppercase",flexShrink:0}}>K-Means:</div>
+            <select value={nClass} onChange={e=>setNClass(Number(e.target.value))} style={{background:C.bg3,border:`1px solid ${C.border}`,borderRadius:5,padding:"5px 8px",color:C.text,fontSize:11,outline:"none",flex:1}}>
+              {[3,4,5,6,7,8].map(n=><option key={n} value={n}>{n} classes</option>)}
+            </select>
+          </div>
+          {analysis&&<div style={{background:`rgba(${is360?"168,85,247":"0,212,255"},.06)`,border:`1px solid rgba(${is360?"168,85,247":"0,212,255"},.3)`,borderRadius:7,padding:"8px 10px"}}><div style={{fontSize:8,color:C.text3,textTransform:"uppercase",marginBottom:2}}>Selecionada</div><div style={{fontSize:12,fontWeight:700}}>{analysis.icon} {analysis.label}</div><div style={{fontSize:9,color:C.text2,marginTop:1}}>{analysis.desc}</div></div>}
+          <button onClick={()=>{if(image&&analysis)setShowModal(true);}} disabled={!image||!analysis} style={{width:"100%",background:`linear-gradient(135deg,${is360?C.purple:C.blue},${is360?C.pink:C.cyan})`,color:"#fff",border:"none",padding:11,borderRadius:7,fontSize:12,fontWeight:700,cursor:(!image||!analysis)?"not-allowed":"pointer",opacity:(!image||!analysis)?.4:1}}>
+            {!image?"📁 Carregue uma imagem":!analysis?"🎯 Selecione uma analise":"🚀 Gerar Relatorio"}
+          </button>
+          <button onClick={()=>setPage("landing")} style={{width:"100%",background:"transparent",border:`1px solid ${C.border}`,color:C.text2,padding:7,borderRadius:6,fontSize:11,cursor:"pointer"}}>← Voltar</button>
+        </div>
+        <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+          <div style={{padding:"8px 13px",borderBottom:`1px solid ${C.border}`,display:"flex",gap:5,flexWrap:"wrap",background:C.bg2}}>
+            {cats.map(c=><button key={c} onClick={()=>setCatF(c)} style={{padding:"3px 10px",borderRadius:18,fontSize:9,fontWeight:700,cursor:"pointer",border:`1px solid ${catF===c?ac:C.border}`,background:catF===c?`${ac}18`:"transparent",color:catF===c?ac:C.text3}}>{c}</button>)}
+          </div>
+          <div style={{flex:1,padding:13,overflowY:"auto",display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(170px,1fr))",gap:7,alignContent:"start"}}>
+            {filtered.map(a=>(
+              <Card key={a.id} style={{cursor:"pointer",padding:11,border:`1px solid ${analysis?.id===a.id?ac:C.border}`,background:analysis?.id===a.id?`rgba(${is360?"168,85,247":"0,212,255"},.07)`:C.panel,transition:".15s"}} onClick={()=>setAnalysis(a)}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><div style={{fontSize:17}}>{a.icon}</div>{a.cat&&<span style={{fontSize:7,padding:"1px 5px",borderRadius:7,background:`${ac}15`,color:ac,border:`1px solid ${ac}30`,fontWeight:700}}>{a.cat}</span>}</div>
+                <div style={{fontSize:10,fontWeight:700,marginBottom:2}}>{a.label}</div>
+                <div style={{fontSize:9,color:C.text2,lineHeight:1.4,marginBottom:5}}>{a.desc}</div>
+                <div style={{display:"flex",gap:3,flexWrap:"wrap",alignItems:"center"}}>{a.tags.map(t=><Tag key={t} t={t}/>)}{analysis?.id===a.id&&<div style={{marginLeft:"auto",width:6,height:6,borderRadius:"50%",background:ac}}/>}</div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </div>
+      {showModal&&analysis&&(
+        <div onClick={()=>setShowModal(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(6px)"}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:13,width:800,maxWidth:"95vw",maxHeight:"88vh",overflow:"hidden",display:"flex",flexDirection:"column"}}>
+            <div style={{padding:"13px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div><div style={{fontSize:14,fontWeight:800}}>{analysis.icon} {analysis.label}</div><div style={{fontSize:10,color:C.text2,marginTop:2}}>{is360?"Analise 360°":"Sat/Drone"} · Selecione o modelo</div></div>
+              <button onClick={()=>setShowModal(false)} style={{width:25,height:25,borderRadius:5,border:`1px solid ${C.border}`,background:C.panel,color:C.text2,cursor:"pointer",fontSize:12}}>✕</button>
+            </div>
+            <div style={{overflowY:"auto",padding:"12px 16px",flex:1}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
+                {analysis.models.map((m,i)=>{
+                  const gc={Baixa:C.green,Media:C.yellow,Alta:C.red,"M.Alta":C.red};
+                  return(<div key={m.name} onClick={()=>{setSelIdx(i);setModel(m.name);}} style={{background:C.panel,border:`2px solid ${selIdx===i?C.green:m.rec?ac:C.border}`,borderRadius:10,padding:12,cursor:"pointer",position:"relative"}}>
+                    {m.rec&&<div style={{position:"absolute",top:8,right:8,background:`linear-gradient(135deg,${ac},${is360?C.pink:C.blue2})`,color:"#fff",fontSize:8,fontWeight:800,padding:"2px 7px",borderRadius:8}}>✨ Rec.</div>}
+                    <div style={{fontSize:13,fontWeight:800,marginBottom:2}}>{m.name}</div>
+                    <div style={{fontSize:9,color:C.blue2,fontFamily:"monospace",background:"rgba(59,158,255,.1)",padding:"1px 5px",borderRadius:3,display:"inline-block",marginBottom:6}}>{m.lib}</div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:3,marginBottom:7}}>
+                      {[["Compl.",m.compl,gc[m.compl]],["GPU",m.gpu?"Sim":"Nao",m.gpu?C.red:C.green],["Tempo",m.time,""],["Acc.",m.acc,""]].map(([k,v,c])=><div key={k} style={{background:C.bg3,borderRadius:4,padding:"3px 4px"}}><div style={{fontSize:7,color:C.text3,textTransform:"uppercase",marginBottom:1}}>{k}</div><div style={{fontSize:8,fontWeight:600,color:c||C.text}}>{v}</div></div>)}
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:3}}>
+                      <div style={{background:"rgba(0,255,136,.05)",border:"1px solid rgba(0,255,136,.15)",borderRadius:4,padding:"3px 5px",fontSize:8,color:"rgba(0,255,136,.85)",lineHeight:1.4}}>✅ {m.pros}</div>
+                      <div style={{background:"rgba(255,77,109,.05)",border:"1px solid rgba(255,77,109,.15)",borderRadius:4,padding:"3px 5px",fontSize:8,color:"rgba(255,77,109,.85)",lineHeight:1.4}}>⚠️ {m.cons}</div>
+                    </div>
+                  </div>);
+                })}
+              </div>
+            </div>
+            <div style={{padding:"10px 16px",borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",background:C.bg}}>
+              <div><div style={{fontSize:9,color:C.text3}}>Selecionado:</div><div style={{fontSize:12,fontWeight:700,color:selIdx!==null?C.green:C.text3}}>{selIdx!==null?analysis.models[selIdx].name:"—"}</div></div>
+              <div style={{display:"flex",gap:7}}>
+                <Btn variant="secondary" onClick={()=>setShowModal(false)}>Cancelar</Btn>
+                <Btn onClick={run} disabled={selIdx===null} style={{opacity:selIdx!==null?1:.4,background:`linear-gradient(135deg,${is360?C.purple:C.blue},${is360?C.pink:C.cyan})`}}>📊 Gerar Relatorio</Btn>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
