@@ -336,3 +336,19 @@ Este projeto está licenciado sob a [MIT License](LICENSE) — sinta-se livre pa
 🛰️ **TerraLens AI v4.0** · 35 análises · 100% Front-End · Vercel
 
 </div>
+
+## 🤝 Como Contribuir
+
+1. Faça um **Fork** do repositório
+2. Crie uma branch: `git checkout -b feature/MinhaFeature`
+3. Commit suas mudanças: `git commit -m 'Add MinhaFeature'`
+4. Push para a branch: `git push origin feature/MinhaFeature`
+5. Abra um **Pull Request**
+
+Ideias de contribuição:
+- 🎯 Melhorar detectores 360° com datasets reais
+- 📊 Novas análises geoespaciais
+- 🌍 Tradução para outros idiomas
+- 📱 Responsividade mobile
+- 🐛 Correção de bugs
+```
