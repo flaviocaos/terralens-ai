@@ -199,9 +199,15 @@ function detect360Elements(data,W,H,cropTop,cH,id){
       return null;
     },
     postes: c=>{
-      // Postes ficam na faixa SUPERIOR/MEDIA (gy 0-3), são cinza escuro e estreitos
-      if(c.gray>0.38&&c.dark>0.18&&c.gy<=3&&c.green<0.10)
-        return{label:"Poste",color:"#00d4ff",conf:clamp(63+c.gray*75)};
+      // Poste próximo — cinza escuro vertical, faixa superior/média
+      if(c.gray>0.32&&c.dark>0.15&&c.gy<=3&&c.green<0.12&&c.br<0.55)
+        return{label:"Poste",color:"#00d4ff",conf:clamp(65+c.gray*80+c.dark*40)};
+      // Poste distante/fino — menos pixels mas ainda cinza dominante
+      if(c.gray>0.25&&c.gy<=2&&c.br<0.50&&c.green<0.10&&c.r<0.45)
+        return{label:"Poste",color:"#00d4ff",conf:clamp(62+c.gray*70)};
+      // Fiação elétrica — linha escura horizontal no topo
+      if(c.dark>0.25&&c.gy<=1&&c.br<0.35&&c.gray>0.15)
+        return{label:"Fiacao",color:"#3b9eff",conf:clamp(60+c.dark*80)};
       return null;
     },
     placas_rua: c=>{
