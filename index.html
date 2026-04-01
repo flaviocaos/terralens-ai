@@ -95,101 +95,187 @@ function makeFalse(id){const{width:W,height:H,data}=id,cv=document.createElement
 // ── 360° CROP + BOUNDING BOX ENGINE ──
 function make360Crop(imageData,analysisId){
   const{width:W,height:H,data}=imageData;
-  // Corte automático: remove 20% do topo (céu) e 25% do fundo (capô/chão)
-  const cropTop=Math.round(H*0.18),cropBot=Math.round(H*0.22);
+  // Corte: remove céu (topo 20%) e capô (fundo 28%)
+  const cropTop=Math.floor(H*0.20),cropBot=Math.floor(H*0.28);
   const cH=H-cropTop-cropBot;
+  // Canvas do tamanho da faixa útil
   const cv=document.createElement("canvas");cv.width=W;cv.height=cH;
   const ctx=cv.getContext("2d");
-  // Desenha imagem cortada
-  const tmp=document.createElement("canvas");tmp.width=W;tmp.height=H;
-  const tctx=tmp.getContext("2d"),iout=tctx.createImageData(W,H);
-  for(let i=0;i<W*H*4;i++)iout.data[i]=data[i];
-  tctx.putImageData(iout,0,0);
-  ctx.drawImage(tmp,0,cropTop,W,cH,0,0,W,cH);
-  // Detectar elementos por análise de cor em grid
+  // Copia apenas a faixa útil pixel a pixel
+  const out=ctx.createImageData(W,cH);
+  for(let y=0;y<cH;y++){
+    for(let x=0;x<W;x++){
+      const src=((y+cropTop)*W+x)*4,dst=(y*W+x)*4;
+      out.data[dst]=data[src];out.data[dst+1]=data[src+1];
+      out.data[dst+2]=data[src+2];out.data[dst+3]=255;
+    }
+  }
+  ctx.putImageData(out,0,0);
+  // Detecta elementos na faixa útil
   const boxes=detect360Elements(data,W,H,cropTop,cH,analysisId);
-  // Desenhar bounding boxes
+  // Desenha bounding boxes
   boxes.forEach(box=>{
     const{x,y,w,h,label,color,conf}=box;
-    const by=y-cropTop;
-    if(by<0||by+h>cH)return;
-    ctx.strokeStyle=color;ctx.lineWidth=3;
-    ctx.strokeRect(x,by,w,h);
-    // Fundo do label
-    ctx.fillStyle=color+'cc';
-    const lw=ctx.measureText(`${label} ${conf}%`).width+10;
-    ctx.fillRect(x,by-22,lw,22);
-    ctx.fillStyle="#fff";ctx.font="bold 13px Segoe UI";
-    ctx.fillText(`${label} ${conf}%`,x+5,by-6);
+    if(y<0||y+h>cH||x<0||x+w>W)return;
+    // Box principal
+    ctx.strokeStyle=color;ctx.lineWidth=2.5;
+    ctx.strokeRect(x,y,w,h);
+    // Fundo semitransparente do label
+    ctx.font="bold 12px Segoe UI,sans-serif";
+    const txt=`${label}  ${conf}%`;
+    const tw=ctx.measureText(txt).width+12;
+    const ty=y>20?y-20:y+h+2;
+    ctx.fillStyle=color+"dd";
+    ctx.beginPath();ctx.roundRect(x,ty,tw,19,4);ctx.fill();
+    ctx.fillStyle="#fff";
+    ctx.fillText(txt,x+6,ty+13);
     // Cantos decorativos
-    const cs=12;
-    ctx.lineWidth=3;ctx.strokeStyle=color;
-    [[x,by],[x+w,by],[x,by+h],[x+w,by+h]].forEach(([cx2,cy2],i)=>{
-      const sx=i%2===0?1:-1,sy=i<2?1:-1;
-      ctx.beginPath();ctx.moveTo(cx2,cy2+sy*cs);ctx.lineTo(cx2,cy2);ctx.lineTo(cx2+sx*cs,cy2);ctx.stroke();
+    const cs=10;ctx.lineWidth=3;ctx.strokeStyle=color;
+    [[x,y,1,1],[x+w,y,-1,1],[x,y+h,1,-1],[x+w,y+h,-1,-1]].forEach(([px,py,sx,sy])=>{
+      ctx.beginPath();ctx.moveTo(px+sx*cs,py);ctx.lineTo(px,py);ctx.lineTo(px,py+sy*cs);ctx.stroke();
     });
   });
   return{url:cv.toDataURL("image/png"),boxes,cropInfo:{top:cropTop,bot:cropBot,usefulH:cH}};}
 
 function detect360Elements(data,W,H,cropTop,cH,id){
-  const boxes=[];
-  const gridX=8,gridY=5;
+  // Grid mais fino: 10 colunas x 6 linhas
+  const gridX=10,gridY=6;
   const gW=Math.floor(W/gridX),gH=Math.floor(cH/gridY);
   const cells=[];
-  // Analisa cada célula do grid
   for(let gy=0;gy<gridY;gy++){
     for(let gx=0;gx<gridX;gx++){
-      let sr=0,sg=0,sb=0,cnt=0,dark=0,bright=0,redPx=0,yellowPx=0;
-      const x0=gx*gW,y0=cropTop+gy*gH,x1=x0+gW,y1=y0+gH;
-      for(let y=y0;y<y1;y+=3){for(let x=x0;x<x1;x+=3){
-        const i=(y*W+x)*4,r=data[i]/255,g=data[i+1]/255,b=data[i+2]/255,br=(r+g+b)/3;
+      let sr=0,sg=0,sb=0,cnt=0,nDark=0,nBright=0,nRed=0,nYellow=0,nGray=0,nGreen=0;
+      const x0=gx*gW,y0=cropTop+gy*gH;
+      for(let dy=0;dy<gH;dy+=2){for(let dx=0;dx<gW;dx+=2){
+        const px=x0+dx,py=y0+dy;
+        if(px>=W||py>=H)continue;
+        const i=(py*W+px)*4;
+        const r=data[i]/255,g=data[i+1]/255,b=data[i+2]/255,br=(r+g+b)/3;
         sr+=r;sg+=g;sb+=b;cnt++;
-        if(br<0.25)dark++;if(br>0.7)bright++;
-        if(r>0.6&&g<0.25&&b<0.25)redPx++;
-        if(r>0.7&&g>0.55&&b<0.25)yellowPx++;
+        if(br<0.22)nDark++;
+        if(br>0.72)nBright++;
+        // Vermelho puro (placa PARE)
+        if(r>0.55&&g<0.25&&b<0.25)nRed++;
+        // Amarelo/laranja (veículo, sinalização)
+        if(r>0.65&&g>0.45&&b<0.25)nYellow++;
+        // Cinza (asfalto, concreto, poste)
+        if(Math.abs(r-g)<0.06&&Math.abs(g-b)<0.06&&br>0.25&&br<0.65)nGray++;
+        // Verde vegetação
+        if(g>r+0.06&&g>b+0.04&&g>0.25)nGreen++;
       }}
-      if(cnt>0){const n=cnt;cells.push({gx,gy,x:x0,y:y0-cropTop,w:gW,h:gH,r:sr/n,g:sg/n,b:sb/n,br:(sr+sg+sb)/(n*3),dark:dark/n,bright:bright/n,red:redPx/n,yellow:yellowPx/n,gli:(2*(sg/n)-(sr/n)-(sb/n))/(2*(sg/n)+(sr/n)+(sb/n)+1e-9)});}
+      if(cnt<1)continue;
+      const n=cnt;
+      cells.push({gx,gy,
+        x:x0,y:gy*gH,w:gW,h:gH,
+        r:sr/n,g:sg/n,b:sb/n,
+        br:(sr+sg+sb)/(n*3),
+        dark:nDark/n,bright:nBright/n,
+        red:nRed/n,yellow:nYellow/n,
+        gray:nGray/n,green:nGreen/n,
+        gli:(2*(sg/n)-(sr/n)-(sb/n))/(2*(sg/n)+(sr/n)+(sb/n)+1e-9)
+      });
     }
   }
-  // Detecta elementos por tipo de análise
-  const detectors={
-    postes:(c)=>c.dark>0.3&&c.br<0.35&&c.gy<3?{label:"Poste",color:"#00d4ff",conf:Math.round(65+c.dark*80)}:null,
-    buracos:(c)=>c.dark>0.4&&c.gy>=3&&c.br<0.3?{label:"Buraco",color:"#ff4d6d",conf:Math.round(60+c.dark*70)}:null,
-    placas_rua:(c)=>c.red>0.15&&c.gy<4?{label:"Placa",color:"#ffe44d",conf:Math.round(70+c.red*100)}:null,
-    veiculos360:(c)=>c.yellow>0.2&&c.br>0.4?{label:"Veiculo",color:"#ff9f1c",conf:Math.round(65+c.yellow*80)}:null,
-    arborizacao:(c)=>c.gli>0.08&&c.g>0.35?{label:"Arvore",color:"#00ff88",conf:Math.round(70+c.gli*150)}:null,
-    fachadas:(c)=>c.br>0.35&&c.br<0.75&&c.gy>=2&&c.gy<4?{label:"Fachada",color:"#a855f7",conf:Math.round(60+c.br*50)}:null,
-    rachaduras:(c)=>c.dark>0.25&&c.br>0.2&&c.br<0.5&&c.gy>=2?{label:"Patologia",color:"#ff4d6d",conf:Math.round(55+c.dark*60)}:null,
-    acessibilidade:(c)=>c.bright>0.3&&c.gy>=3?{label:"Pavimento",color:"#3b9eff",conf:Math.round(60+c.bright*50)}:null,
-    lixo_irregular:(c)=>c.dark>0.2&&c.g<0.3&&c.gy>=3?{label:"Residuo",color:"#ff9f1c",conf:Math.round(55+c.dark*60)}:null,
-    bueiros:(c)=>c.dark>0.5&&c.gy>=3&&c.br<0.2?{label:"Bueiro",color:"#0fffc1",conf:Math.round(60+c.dark*60)}:null,
-    comercios:(c)=>c.bright>0.25&&c.red>0.05&&c.gy>=1&&c.gy<4?{label:"Comercio",color:"#ff6eb4",conf:Math.round(58+c.bright*40)}:null,
-    inspecao_predial:(c)=>c.br>0.25&&c.br<0.65&&c.gy>=2?{label:"Fachada",color:"#a855f7",conf:Math.round(60+c.br*50)}:null,
-    placas_auto:(c)=>c.yellow>0.1&&c.bright>0.3&&c.gy>=2?{label:"Placa Auto",color:"#ffe44d",conf:Math.round(62+c.yellow*80)}:null,
-    pessoas360:(c)=>c.br>0.3&&c.br<0.6&&c.gli<0.05&&c.gy>=2&&c.gy<4?{label:"Pessoa",color:"#3b9eff",conf:Math.round(55+c.br*40)}:null,
+
+  // Detectores específicos por análise — confiança SEMPRE 60-95%
+  const clamp=(v,min=60,max=95)=>Math.min(max,Math.max(min,Math.round(v)));
+  const detMap={
+    veiculos360: c=>{
+      if(c.yellow>0.12&&c.br>0.35)return{label:"Veiculo",color:"#ff9f1c",conf:clamp(62+c.yellow*200)};
+      if(c.gray>0.35&&c.gy>=2&&c.gy<=4)return{label:"Veiculo",color:"#8ba3c7",conf:clamp(60+c.gray*80)};
+      return null;
+    },
+    buracos: c=>{
+      if(c.dark>0.35&&c.gy>=3&&c.br<0.28)return{label:"Buraco",color:"#ff4d6d",conf:clamp(62+c.dark*90)};
+      if(c.gray>0.3&&c.gy>=3&&c.dark>0.15)return{label:"Pavimento Deg.",color:"#ff9f1c",conf:clamp(60+c.dark*70)};
+      return null;
+    },
+    postes: c=>{
+      if(c.gray>0.4&&c.dark>0.2&&c.gy<=3&&c.gx>=1&&c.gx<=8)return{label:"Poste",color:"#00d4ff",conf:clamp(62+c.gray*80)};
+      return null;
+    },
+    placas_rua: c=>{
+      if(c.red>0.08)return{label:"Placa",color:"#ffe44d",conf:clamp(65+c.red*200)};
+      if(c.bright>0.5&&c.gy>=1&&c.gy<=3)return{label:"Sinalizacao",color:"#ffe44d",conf:clamp(60+c.bright*50)};
+      return null;
+    },
+    placas_auto: c=>{
+      if(c.bright>0.55&&c.gray>0.3&&c.gy>=2&&c.gy<=4)return{label:"Placa Auto",color:"#ffe44d",conf:clamp(62+c.bright*60)};
+      return null;
+    },
+    arborizacao: c=>{
+      if(c.green>0.25)return{label:"Arvore",color:"#00ff88",conf:clamp(65+c.green*120)};
+      if(c.gli>0.06&&c.g>0.3)return{label:"Vegetacao",color:"#00ff88",conf:clamp(62+c.gli*200)};
+      return null;
+    },
+    fachadas: c=>{
+      if(c.br>0.3&&c.br<0.7&&c.gy>=2&&c.gy<=4&&c.green<0.1)return{label:"Fachada",color:"#a855f7",conf:clamp(60+c.br*50)};
+      return null;
+    },
+    rachaduras: c=>{
+      if(c.dark>0.2&&c.gray>0.25&&c.gy>=2)return{label:"Patologia",color:"#ff4d6d",conf:clamp(60+c.dark*80)};
+      return null;
+    },
+    bueiros: c=>{
+      if(c.dark>0.45&&c.gy>=4&&c.gray>0.2)return{label:"Bueiro",color:"#0fffc1",conf:clamp(62+c.dark*70)};
+      return null;
+    },
+    acessibilidade: c=>{
+      if(c.gray>0.35&&c.gy>=3)return{label:"Calcada",color:"#3b9eff",conf:clamp(60+c.gray*80)};
+      if(c.bright>0.4&&c.gy>=4)return{label:"Piso Tatil",color:"#ffe44d",conf:clamp(60+c.bright*60)};
+      return null;
+    },
+    lixo_irregular: c=>{
+      if(c.dark>0.18&&c.green<0.1&&c.gy>=3&&c.gray<0.2)return{label:"Residuo",color:"#ff9f1c",conf:clamp(60+c.dark*80)};
+      return null;
+    },
+    comercios: c=>{
+      if(c.bright>0.3&&c.gy>=1&&c.gy<=4&&c.green<0.12)return{label:"Comercio",color:"#ff6eb4",conf:clamp(60+c.bright*60)};
+      return null;
+    },
+    inspecao_predial: c=>{
+      if(c.dark>0.15&&c.gray>0.2&&c.gy>=2&&c.gy<=4)return{label:"Dano",color:"#ff4d6d",conf:clamp(60+c.dark*70)};
+      if(c.br>0.3&&c.gy>=2&&c.green<0.1)return{label:"Fachada",color:"#a855f7",conf:clamp(60+c.br*50)};
+      return null;
+    },
+    pessoas360: c=>{
+      if(c.br>0.28&&c.br<0.65&&c.green<0.1&&c.gy>=2&&c.gy<=4&&c.gray<0.4)return{label:"Pessoa",color:"#3b9eff",conf:clamp(60+c.br*50)};
+      return null;
+    },
   };
-  // Detector genérico fallback
-  const generic=(c)=>{
-    if(c.gli>0.08)return{label:"Vegetacao",color:"#00ff88",conf:Math.round(65+c.gli*100)};
-    if(c.dark>0.4&&c.gy>=3)return{label:"Sombra/Buraco",color:"#ff4d6d",conf:Math.round(55+c.dark*50)};
-    if(c.bright>0.4&&c.gy<2)return{label:"Ceu",color:"#3b9eff",conf:Math.round(70+c.bright*30)};
-    if(c.br>0.3&&c.gy>=2&&c.gy<4)return{label:"Edificacao",color:"#a855f7",conf:Math.round(58+c.br*40)};
-    return null;
-  };
-  const det=detectors[id]||generic;
-  const seen=new Set();
-  cells.forEach(c=>{
-    const res=det(c)||generic(c);
-    if(!res||res.conf<60)return;
-    const key=`${res.label}_${Math.floor(c.gx/2)}_${Math.floor(c.gy/2)}`;
-    if(seen.has(key))return;
-    seen.add(key);
-    // Expande box para ficar mais visível
-    const pad=10;
-    boxes.push({x:Math.max(0,c.x-pad),y:c.y,w:c.w+pad*2,h:c.h+pad,label:res.label,color:res.color,conf:res.conf});
-  });
-  // Limita a 12 boxes mais confiantes
-  return boxes.sort((a,b)=>b.conf-a.conf).slice(0,12);
+
+  const det=detMap[id];
+  if(!det)return[];
+
+  // Executa detector e agrupa células vizinhas
+  const hitGrid=Array.from({length:gridY},()=>new Array(gridX).fill(null));
+  cells.forEach(c=>{const res=det(c);if(res)hitGrid[c.gy][c.gx]={...res,c};});
+
+  // Merge de células adjacentes com mesmo label
+  const visited=new Set(),boxes=[];
+  for(let gy=0;gy<gridY;gy++){for(let gx=0;gx<gridX;gx++){
+    if(!hitGrid[gy][gx]||visited.has(`${gx}_${gy}`))continue;
+    const{label,color,conf,c}=hitGrid[gy][gx];
+    let x1=c.x,y1=c.y,x2=c.x+c.w,y2=c.y+c.h,maxConf=conf,cnt2=1;
+    // Expande para células adjacentes do mesmo label
+    [[0,1],[1,0],[0,-1],[-1,0],[1,1],[-1,1]].forEach(([dx,dy])=>{
+      const nx=gx+dx,ny=gy+dy;
+      if(nx<0||nx>=gridX||ny<0||ny>=gridY)return;
+      const nb=hitGrid[ny][nx];
+      if(nb&&nb.label===label&&!visited.has(`${nx}_${ny}`)){
+        visited.add(`${nx}_${ny}`);
+        x1=Math.min(x1,nb.c.x);y1=Math.min(y1,nb.c.y);
+        x2=Math.max(x2,nb.c.x+nb.c.w);y2=Math.max(y2,nb.c.y+nb.c.h);
+        maxConf=Math.max(maxConf,nb.conf);cnt2++;
+      }
+    });
+    visited.add(`${gx}_${gy}`);
+    // Padding mínimo para box visível
+    const pad=8;
+    boxes.push({x:Math.max(0,x1-pad),y:Math.max(0,y1-pad),w:Math.min(W,x2-x1+pad*2),h:Math.min(cH,y2-y1+pad*2),label,color,conf:Math.min(95,maxConf)});
+  }}
+  // Máximo 10 boxes, mais confiantes primeiro
+  return boxes.sort((a,b)=>b.conf-a.conf).slice(0,10);
 }
 
 function buildResult(id,mode,model,js,lulcCls,ctx){
