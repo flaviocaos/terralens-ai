@@ -179,8 +179,18 @@ function detect360Elements(data,W,H,cropTop,cH,id){
   const clamp=(v,min=60,max=95)=>Math.min(max,Math.max(min,Math.round(v)));
   const detMap={
     veiculos360: c=>{
-      if(c.yellow>0.12&&c.br>0.35)return{label:"Veiculo",color:"#ff9f1c",conf:clamp(62+c.yellow*200)};
-      if(c.gray>0.35&&c.gy>=2&&c.gy<=4)return{label:"Veiculo",color:"#8ba3c7",conf:clamp(60+c.gray*80)};
+      // Veículos ficam na faixa INFERIOR (gy >= 3) e têm cor quente ou cinza metálico
+      // Exclui faixa superior onde ficam postes, fios e céu
+      if(c.gy<3)return null;
+      // Amarelo/laranja/vermelho — cores comuns de veículos
+      if(c.yellow>0.10&&c.br>0.30&&c.gy>=3)
+        return{label:"Veiculo",color:"#ff9f1c",conf:clamp(65+c.yellow*180)};
+      // Cinza metálico SÓ na faixa bem baixa e com saturação baixa
+      if(c.gray>0.45&&c.br>0.30&&c.br<0.65&&c.gy>=4&&c.green<0.08)
+        return{label:"Veiculo",color:"#8ba3c7",conf:clamp(62+c.gray*60)};
+      // Branco/prata (gy>=3, muito brilhante mas não é céu)
+      if(c.bright>0.60&&c.gray>0.35&&c.gy>=3&&c.gy<=5&&c.green<0.08)
+        return{label:"Veiculo",color:"#e2eeff",conf:clamp(62+c.bright*40)};
       return null;
     },
     buracos: c=>{
@@ -189,7 +199,9 @@ function detect360Elements(data,W,H,cropTop,cH,id){
       return null;
     },
     postes: c=>{
-      if(c.gray>0.4&&c.dark>0.2&&c.gy<=3&&c.gx>=1&&c.gx<=8)return{label:"Poste",color:"#00d4ff",conf:clamp(62+c.gray*80)};
+      // Postes ficam na faixa SUPERIOR/MEDIA (gy 0-3), são cinza escuro e estreitos
+      if(c.gray>0.38&&c.dark>0.18&&c.gy<=3&&c.green<0.10)
+        return{label:"Poste",color:"#00d4ff",conf:clamp(63+c.gray*75)};
       return null;
     },
     placas_rua: c=>{
